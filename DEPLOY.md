@@ -25,6 +25,14 @@ mid-demo. Use a container host with a volume — or implement the Postgres adapt
    `railway.json` and the `Dockerfile` are detected automatically.
 3. **Add a volume:** service → *Settings* → *Volumes* → **Add Volume**, mount path
    `/app/.recourse`. Without this the ledger resets on each deploy.
+
+   > **Volume permissions.** Railway (and Fly, and plain `docker run -v`) attach volumes owned by
+   > root, which discards the ownership set at build time. The image handles this itself: the
+   > entrypoint starts as root, takes ownership of the mount, then drops to uid 1001 before
+   > running the app. You do **not** need `RAILWAY_RUN_UID=0`, and you should not set it — it
+   > runs the entire application as root to work around a problem the image already solves.
+   >
+   > If you previously set `RAILWAY_RUN_UID`, remove it after deploying this version.
 4. **Variables** (Settings → Variables):
    ```
    GENLAYER_NETWORK=studionet

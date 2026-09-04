@@ -23,7 +23,10 @@ ENV PORT=3000
 # The ledger lives here. Mount a volume so protected transactions survive deploys.
 ENV RECOURSE_STORE_FILE=/app/.recourse/ledger.json
 
-RUN addgroup -g 1001 -S nodejs && adduser -S recourse -u 1001
+# su-exec lets the entrypoint drop privileges after preparing the volume.
+RUN apk add --no-cache su-exec \
+ && addgroup -g 1001 -S nodejs \
+ && adduser -S recourse -u 1001 -G nodejs
 
 COPY --from=deps    /app/node_modules ./node_modules
 COPY --from=builder /app/.next        ./.next
@@ -34,9 +37,15 @@ COPY --from=builder /app/scripts      ./scripts
 COPY --from=builder /app/data         ./data
 COPY --from=builder /app/contracts    ./contracts
 COPY --from=builder /app/genlayer.deployment.json ./genlayer.deployment.json
+COPY --from=builder /app/scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 RUN mkdir -p /app/.recourse && chown -R recourse:nodejs /app/.recourse
-USER recourse
 
+# NOTE: no USER directive. The entrypoint starts as root purely to take
+# ownership of the mounted volume, then execs the app as uid 1001. Setting
+# USER here would make that impossible and force the operator to run the whole
+# container as root instead.
 EXPOSE 3000
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["npm", "run", "start"]
