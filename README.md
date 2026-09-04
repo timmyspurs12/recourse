@@ -63,7 +63,7 @@ reason rather than filled in with something plausible.
 | Agreement + evidence hashing | **Real** | Canonical JSON (RFC 8785 style) → sha256, recomputable by either party |
 | GenLayer adjudication | **Real** | `RecourseAdjudicator` Intelligent Contract deployed on GenLayer; real transactions, real validator consensus, real rulings |
 | Agent authentication | **Real cryptography** | Writes require a secp256k1 request signature. Handles are bound to keys in a persistent registry — pre-registered, or trust-on-first-use. Wrong party, forged, tampered, stale and replayed requests are all rejected |
-| x402 payment authorization | **Real cryptography** | EIP-712 signature over an EIP-3009 `TransferWithAuthorization`, verified by signer recovery; replay, tampering and expiry rejected |
+| x402 payment authorization | **Real cryptography** | EIP-712 signature over an EIP-3009 `TransferWithAuthorization`, verified by signer recovery; replay, tampering and expiry rejected. The v2 wire format is implemented directly against the spec with `viem` — there is no `@x402/*` SDK dependency, so read `integrations/x402/rail.ts` rather than trusting a package name |
 | x402 on-chain settlement | **Not performed** | Broadcasting needs a funded facilitator and a funded buyer wallet. Settlement is recorded as `SIGNATURE_VERIFIED_LOCAL_ESCROW` with a **null** transaction hash. No fake hashes anywhere |
 | Seeded ledger records | **Real runs, local** | Produced by executing the real protocol, labelled `DEMO FIXTURE` because the counterparties are not real merchants |
 | Storage | **File-backed** | Event-sourced JSON store behind a `RecourseStore` port; the Postgres schema it mirrors is in `infra/store/schema.sql` |

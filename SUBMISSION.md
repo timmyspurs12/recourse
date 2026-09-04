@@ -181,10 +181,12 @@ repo rather than asserted:
    reach the same decision and materiality finding; a coherent-but-wrong ruling
    ("buyer wins, pay the merchant") is rejected on both sides of the wire. A validator check that
    only asks "is this valid JSON?" is theatre.
-3. **It is a payment-rail integration, not a bespoke escrow.** Real x402 v2: 402 handshake,
-   EIP-3009 `TransferWithAuthorization` signed as EIP-712, signer recovery, replay and tamper
-   rejection. `PaymentRail` is a port, which is what makes "one dispute API across rails" true
-   rather than a slogan.
+3. **It is a payment-rail integration, not a bespoke escrow.** The x402 v2 handshake is real —
+   402 with `PaymentRequirements`, EIP-3009 `TransferWithAuthorization` signed as EIP-712, signer
+   recovery, replay and tamper rejection — implemented directly against the spec with `viem`
+   rather than pulled in as an `@x402/*` dependency. `PaymentRail` is a port, which is what makes
+   "one dispute API across rails" true rather than a slogan. Settlement is **not** broadcast and
+   the UI says so.
 4. **It is shipped as infrastructure.** `@recourse/sdk` with signed agent identity, a documented
    HTTP API, a Postgres schema, 39 tests, and an adversarial security analysis. The deliverable is
    something another team integrates, not an app you visit.

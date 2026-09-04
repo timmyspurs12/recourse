@@ -160,6 +160,13 @@ returns, `GET` polls. Nothing blocks a request waiting for a network.
 
 `integrations/x402/rail.ts` · `integrations/x402/signer.ts`
 
+**Implemented directly, not via an SDK.** There is no `@x402/*` dependency: the v2 message shapes
+(`PaymentRequirements`, `PaymentPayload`, `x402Version: 2`) and the EIP-3009 typed-data signing are
+written out in `integrations/x402/rail.ts` and `signer.ts` against the specification, using `viem`
+for the cryptography. That is a deliberate trade — fewer moving parts and an auditable
+implementation, at the cost of not inheriting upstream changes automatically. Verify it by reading
+the file, not by checking `package.json`.
+
 Recourse **wraps** x402 rather than replacing it. The resource endpoint
 (`GET /api/resource/:orderId`) answers `402` with a `PAYMENT-REQUIRED` header carrying base64
 `PaymentRequirements` in x402 v2 shape. The buyer signs an EIP-3009

@@ -117,3 +117,57 @@ test("only semantic questions are eligible for the forum", async () => {
   assert.equal(dossier.verification?.semanticQuestions.length, 1);
   assert.equal(dossier.verification?.semanticQuestions[0]?.termId, "material_accuracy");
 });
+
+test("boundary: exactly meeting a threshold passes, one short breaches", async () => {
+  /*
+   * The audit case. GTE is an inclusive comparison, and off-by-one here would
+   * silently refund honest merchants.
+   */
+  const { verifyDelivery } = await import("../domain/verification/engine");
+  const { draftAgreement } = await import("../domain/agreements/agreement");
+  const { buildDelivery } = await import("../domain/evidence/evidence");
+  const { BRIEF_TERMS } = await import("../server/scenario");
+
+  const agreement = draftAgreement({
+    orderId: "RC-000001",
+    buyer: "b.agent",
+    merchant: "m.agent",
+    resource: { name: "Brief", type: "digital_report" },
+    amount: "1.00",
+    currency: "USDC",
+    rail: "simulated",
+    terms: BRIEF_TERMS,
+    deliveryDeadline: "2026-12-01T00:00:00.000Z",
+    recourseWindowHours: 72,
+    createdAt: "2026-09-04T00:00:00.000Z",
+  });
+
+  const deliveryWith = (sourceCount: number) =>
+    buildDelivery({
+      orderId: "RC-000001",
+      statement: "delivered",
+      artifactHash: `0x${"a1".repeat(32)}`,
+      assertions: {
+        sourceCount,
+        geography: "Lagos, Nigeria",
+        sectionCount: 4,
+        maxSourceAgeDays: 10,
+        format: "JSON",
+        summary: "s",
+      },
+      evidence: [],
+      submittedAt: "2026-09-04T00:00:00.000Z",
+    });
+
+  const at = (n: number) =>
+    verifyDelivery(agreement, deliveryWith(n), "2026-09-04T00:00:00.000Z").checks.find(
+      (c) => c.termId === "minimum_sources",
+    )!;
+
+  assert.equal(at(5).result, "PASS", "5 >= 5 must pass");
+  assert.equal(at(5).expression, "5 ≥ 5");
+  assert.equal(at(6).result, "PASS");
+  assert.equal(at(4).result, "BREACH", "4 < 5 must breach");
+  assert.equal(at(2).result, "BREACH");
+  assert.equal(at(2).expression, "2 < 5");
+});

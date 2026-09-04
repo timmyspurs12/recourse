@@ -168,6 +168,15 @@ export function DemoConsole({
   }, []);
 
   const rows = dossier ? promiseProofRows(dossier) : [];
+  /*
+   * The headline number of this whole protocol: how much was settled by
+   * arithmetic versus how little needed judgment. It is the difference between
+   * this and "ask an LLM to read the evidence", so it should not require
+   * reading three panels to notice.
+   */
+  const localChecks = dossier?.verification?.checks.length ?? 0;
+  const referred =
+    dossier?.dispute && dossier.verification ? 1 : 0;
   const nodes = dossier ? railNodes(dossier) : [];
   const adjudication = dossier?.dispute?.adjudication ?? null;
   const requiredSources = dossier?.agreement.terms.find((t) => t.id === "minimum_sources");
@@ -233,6 +242,22 @@ export function DemoConsole({
         </div>
 
         {nodes.length > 0 ? <TransactionRail nodes={nodes} className="mt-4" compact /> : null}
+
+        {localChecks > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line pt-3">
+            <span className="mono-label text-fg-faint">Verification split</span>
+            <span className="font-mono text-xs text-pass">
+              {localChecks} resolved locally
+              <span className="ml-2 text-fg-faint">no model involved</span>
+            </span>
+            <span className="font-mono text-xs text-pending">
+              {referred} referred to GenLayer
+              <span className="ml-2 text-fg-faint">
+                {referred === 0 ? "arithmetic settled every term" : "materiality only"}
+              </span>
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {/* ---------------------------------------------------------- notices */}
