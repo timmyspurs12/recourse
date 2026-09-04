@@ -23,6 +23,10 @@ undone when the promise is broken.
 
 ---
 
+**Submitting or deploying this?** [`SUBMISSION.md`](SUBMISSION.md) has the Agent Tank form
+pre-filled and the differentiation analysis; [`DEPLOY.md`](DEPLOY.md) gets you a live URL in about
+five minutes.
+
 ## Run it
 
 ```bash
