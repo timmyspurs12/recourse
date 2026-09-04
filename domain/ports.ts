@@ -121,6 +121,8 @@ export interface AdjudicationOutcome {
   transactionHash: string | null;
   networkStatus: string | null;
   votes: Record<string, string> | null;
+  /** Consensus rounds, when the network reports them. Never inferred. */
+  rounds?: number | null;
   ruling: Ruling | null;
   failureReason: string | null;
   finalizedAt: string | null;

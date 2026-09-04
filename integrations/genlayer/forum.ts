@@ -25,13 +25,79 @@ interface LeaderReceipt {
   genvm_result?: { stdout?: string; stderr?: string };
 }
 
+/**
+ * Transaction receipts, across two different shapes.
+ *
+ * Studionet returns snake_case with `consensus_data.votes` and
+ * `data.contract_address`. The public testnets return camelCase with the
+ * validator set split across `lastRound.roundValidators` and
+ * `lastRound.validatorVotes`, and the deployed address in `recipient`.
+ *
+ * Reading only one shape means the other silently loses its validator data —
+ * which is the most load-bearing evidence this product publishes. So both are
+ * normalised into one structure before anything else looks at them.
+ */
 interface Receipt {
   status?: number;
   status_name?: string;
+  statusName?: string;
+  recipient?: string;
+  numOfRounds?: number | string;
+  txExecutionResultName?: string;
+  data?: { contract_address?: string };
   consensus_data?: {
     votes?: Record<string, string>;
     leader_receipt?: LeaderReceipt[];
   };
+  lastRound?: {
+    round?: number | string;
+    roundValidators?: string[];
+    validatorVotes?: number[];
+  };
+}
+
+/**
+ * Vote codes as returned by the testnet consensus contract.
+ *
+ * 0 and 1 are confirmed against live transactions (all-1 rounds report
+ * resultName AGREE). The remaining codes follow the documented enum ordering
+ * but have not been observed here, so anything unrecognised is surfaced as its
+ * raw code rather than given a label it might not deserve.
+ */
+const VOTE_CODES: Record<number, string> = {
+  0: "idle",
+  1: "agree",
+  2: "disagree",
+  3: "timeout",
+  4: "deterministic-violation",
+};
+
+function normalizeVotes(receipt: Receipt): Record<string, string> | null {
+  if (receipt.consensus_data?.votes) return receipt.consensus_data.votes;
+
+  const validators = receipt.lastRound?.roundValidators;
+  const votes = receipt.lastRound?.validatorVotes;
+  if (!validators?.length || !votes?.length) return null;
+
+  const out: Record<string, string> = {};
+  validators.forEach((validator, index) => {
+    const code = Number(votes[index]);
+    out[validator] = VOTE_CODES[code] ?? `code:${code}`;
+  });
+  return out;
+}
+
+/** The address a deployment produced, whichever shape reported it. */
+export function contractAddressFrom(receipt: Receipt): string | null {
+  return receipt.data?.contract_address ?? receipt.recipient ?? null;
+}
+
+function roundsFrom(receipt: Receipt): number | null {
+  const rounds = receipt.numOfRounds ?? receipt.lastRound?.round;
+  if (rounds === undefined || rounds === null) return null;
+  const n = Number(rounds);
+  // lastRound.round is zero-based; numOfRounds is a count.
+  return Number.isFinite(n) ? (receipt.numOfRounds !== undefined ? n : n + 1) : null;
 }
 
 /** GenLayer transaction status codes we care about. */
@@ -48,7 +114,21 @@ const STATUS_NAMES: Record<number, string> = {
 };
 
 function statusName(receipt: Receipt): string {
-  return receipt.status_name ?? STATUS_NAMES[receipt.status ?? -1] ?? `STATUS_${receipt.status}`;
+  return (
+    receipt.statusName ??
+    receipt.status_name ??
+    STATUS_NAMES[receipt.status ?? -1] ??
+    `STATUS_${receipt.status}`
+  );
+}
+
+function executionResult(receipt: Receipt): string | null {
+  const studio = receipt.consensus_data?.leader_receipt?.[0]?.execution_result;
+  if (studio) return studio;
+  const testnet = receipt.txExecutionResultName;
+  // Testnets phrase success as FINISHED_WITH_RETURN.
+  if (!testnet) return null;
+  return testnet.startsWith("FINISHED") ? "SUCCESS" : testnet;
 }
 
 /**
@@ -212,9 +292,8 @@ export class GenLayerForum implements AdjudicationForum {
     }
 
     const network = statusName(receipt);
-    const votes = receipt.consensus_data?.votes ?? null;
-    const leader = receipt.consensus_data?.leader_receipt?.[0];
-    const executionResult = leader?.execution_result ?? null;
+    const votes = normalizeVotes(receipt);
+    const execution = executionResult(receipt);
 
     const settled = network === "FINALIZED" || network === "ACCEPTED";
 
@@ -232,7 +311,7 @@ export class GenLayerForum implements AdjudicationForum {
       };
     }
 
-    if (executionResult && executionResult !== "SUCCESS") {
+    if (execution && execution !== "SUCCESS") {
       return {
         status: "FAILED",
         network: this.config.networkLabel,
@@ -241,7 +320,7 @@ export class GenLayerForum implements AdjudicationForum {
         networkStatus: network,
         votes,
         ruling: null,
-        failureReason: `Contract execution returned ${executionResult}`,
+        failureReason: `Contract execution returned ${execution}`,
         finalizedAt: null,
       };
     }
@@ -295,6 +374,7 @@ export class GenLayerForum implements AdjudicationForum {
       transactionHash: input.transactionHash,
       networkStatus: network,
       votes,
+      rounds: roundsFrom(receipt),
       ruling,
       failureReason: null,
       finalizedAt: new Date().toISOString(),

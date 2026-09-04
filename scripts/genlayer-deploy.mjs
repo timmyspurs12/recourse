@@ -41,6 +41,28 @@ if (!chain) {
 }
 
 const key = (flag("key") || process.env.GENLAYER_PRIVATE_KEY)?.trim();
+
+/*
+ * Validate the key here rather than letting the curve library fail with
+ * "invalid private key, expected hex or 32 bytes, got string", which says
+ * nothing about what to do next. Pasting the placeholder from the docs is an
+ * easy and very common mistake.
+ */
+if (key !== undefined) {
+  const normalized = key.startsWith("0x") ? key.slice(2) : key;
+  if (!/^[0-9a-fA-F]{64}$/.test(normalized)) {
+    console.error(`That is not a private key: "${key}"`);
+    console.error("");
+    if (/YOUR|KEY|xxx|<|>/i.test(key)) {
+      console.error("It looks like a placeholder was pasted literally.");
+    }
+    console.error("A key is 64 hex characters, usually written with a 0x prefix.");
+    console.error("");
+    console.error("Generate one with:   npm run wallet");
+    console.error("Then fund it at:     https://testnet-faucet.genlayer.foundation/");
+    process.exit(1);
+  }
+}
 const account = key ? createAccount(key.startsWith("0x") ? key : `0x${key}`) : createAccount();
 if (!key) {
   console.log("No GENLAYER_PRIVATE_KEY set — using an ephemeral account for this deployment.");
@@ -92,15 +114,28 @@ if (rpcUrl && networkKey.startsWith("testnet")) {
 const hash = await client.deployContract({ code, args: [], leaderOnly: false });
 console.log(`deploy tx: ${hash}`);
 
+/*
+ * Public testnets reach ACCEPTED quickly but can sit there for a long time
+ * before FINALIZED, because finality waits out the appeal window. The contract
+ * is usable at ACCEPTED, so wait for that and report the distinction honestly
+ * rather than timing out on a deployment that actually succeeded.
+ */
 const receipt = await client.waitForTransactionReceipt({
   hash,
-  status: TransactionStatus.FINALIZED,
+  status: networkKey.startsWith("testnet")
+    ? TransactionStatus.ACCEPTED
+    : TransactionStatus.FINALIZED,
   retries: 100,
   interval: 4000,
 });
 
-const execution = receipt?.consensus_data?.leader_receipt?.[0]?.execution_result;
-const address = receipt?.data?.contract_address;
+// Studionet: data.contract_address + consensus_data. Testnets: recipient +
+// txExecutionResultName. Read whichever the network actually sent.
+const execution =
+  receipt?.consensus_data?.leader_receipt?.[0]?.execution_result ??
+  (receipt?.txExecutionResultName?.startsWith("FINISHED") ? "SUCCESS" : receipt?.txExecutionResultName);
+const address = receipt?.data?.contract_address ?? receipt?.recipient;
+const statusLabel = receipt?.statusName ?? receipt?.status_name ?? receipt?.status;
 
 if (execution !== "SUCCESS" || !address) {
   console.error(`Deployment failed. execution_result=${execution ?? "unknown"}`);
@@ -148,6 +183,7 @@ const EXPLORERS = {
 
 console.log(`\nRecourseAdjudicator deployed`);
 console.log(`  address:     ${address}`);
+console.log(`  status:      ${statusLabel}`);
 console.log(`  recorded in: ${outFile}`);
 console.log(`  committed:   ${committedFile}`);
 if (EXPLORERS[networkKey]) {
