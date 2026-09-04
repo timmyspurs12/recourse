@@ -82,10 +82,24 @@ export function getRuntime(): Runtime {
     resourceBaseUrl: process.env.RECOURSE_RESOURCE_URL ?? "https://recourse.local/resource",
   });
 
+  /*
+   * What the badge in the header means.
+   *
+   * Adjudication is genuinely on-network in every case where a forum is
+   * configured — but "on a network" is not one thing. Studionet is a hosted
+   * development sandbox: real validators, real consensus, but shared, free and
+   * reapable. Bradbury and Asimov are public testnets with public explorers and
+   * real fees, so a ruling there is independently verifiable by a stranger.
+   *
+   * The badge distinguishes those, because calling a sandbox deployment LIVE
+   * would be over-claiming and calling a public-testnet deployment DEMO would
+   * be under-claiming.
+   */
+  const publicTestnet =
+    genlayer.networkKey === "testnet-asimov" || genlayer.networkKey === "testnet-bradbury";
+
   const info: RuntimeInfo = {
-    // Adjudication is genuinely on-network; payment settlement is not. The
-    // indicator reports the weaker of the two rather than the flattering one.
-    mode: forum.available ? "DEMO" : "SIMULATED",
+    mode: !forum.available ? "SIMULATED" : publicTestnet ? "LIVE" : "DEMO",
     adjudication: {
       forum: "GENLAYER",
       available: forum.available,
