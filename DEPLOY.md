@@ -71,6 +71,63 @@ docker run -d -p 80:3000 -v recourse-data:/app/.recourse \
 
 ---
 
+## Going from Studionet to a public testnet
+
+Studionet is a **hosted development sandbox**: free, auto-funded, no wallet needed — but it is a
+dev environment, and contracts there can be reaped. For a submission that has to stay verifiable
+for weeks, deploy to a public testnet with a real explorer.
+
+| Network | Explorer | Fees | Use when |
+| --- | --- | --- | --- |
+| `studionet` | `studio.genlayer.com` (Studio UI) | none | development, and as a fallback |
+| `testnet-bradbury` | `explorer-bradbury.genlayer.com` | GEN | **persistent, production-like — recommended** |
+| `testnet-asimov` | `explorer-asimov.genlayer.com` | GEN | infrastructure / stress testing |
+
+### Steps
+
+```bash
+# 0. Install dependencies first. The repository ships without node_modules,
+#    so every npm script fails with MODULE_NOT_FOUND until this is done.
+npm install
+
+# 1. Create a deployment wallet (prints the key ONCE — save it)
+npm run wallet
+
+# 2. Fund the address at https://testnet-faucet.genlayer.foundation/
+#    A deployment costs roughly 0.0018 GEN, so one drip goes a long way.
+
+# 3. Deploy. The script refuses to start on an unfunded wallet and tells you why.
+npm run genlayer:deploy -- --network testnet-bradbury --key 0xYOUR_KEY
+```
+
+The flags work in every shell. If you are in bash and prefer environment
+variables, `GENLAYER_NETWORK=... GENLAYER_PRIVATE_KEY=... npm run genlayer:deploy`
+does the same thing — but that syntax fails in PowerShell and cmd.
+
+It prints the explorer link to paste into the submission form and updates
+`genlayer.deployment.json` so a fresh clone points at the same contract.
+
+### Then point the live app at it
+
+In Railway → Variables:
+
+```
+GENLAYER_NETWORK=testnet-bradbury
+GENLAYER_PRIVATE_KEY=0xYOUR_KEY
+GENLAYER_CONTRACT_ADDRESS=0xYOUR_CONTRACT
+```
+
+> **Every adjudication now costs GEN from that wallet.** Each demo run a judge triggers spends a
+> fee. Adjudication is rate limited to 10/min, but keep an eye on the balance during judging — and
+> know that if it empties, the forum reports `FAILED` and the escrow stays held rather than
+> producing a wrong outcome. Top up from the faucet if needed.
+
+If you would rather not manage a balance during judging, keep the deployed app on `studionet` and
+submit the Bradbury contract link alongside it — but say plainly in the how-to which network the
+running demo uses, because the panel will check.
+
+---
+
 ## Push to GitHub
 
 The repo is committed locally already (one commit, 146 files, no secrets — `.recourse/`,

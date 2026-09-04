@@ -20,14 +20,27 @@ const CHAINS = {
   "testnet-bradbury": testnetBradbury,
 };
 
-const networkKey = process.env.GENLAYER_NETWORK || "studionet";
+/*
+ * Accept flags as well as environment variables.
+ *
+ * `VAR=value npm run ...` is bash-only: it fails in PowerShell and cmd, which
+ * is where most Windows users end up. Flags work everywhere.
+ *
+ *   npm run genlayer:deploy -- --network testnet-bradbury --key 0x...
+ */
+function flag(name) {
+  const i = process.argv.indexOf(`--${name}`);
+  return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : undefined;
+}
+
+const networkKey = flag("network") || process.env.GENLAYER_NETWORK || "studionet";
 const chain = CHAINS[networkKey];
 if (!chain) {
   console.error(`Unknown GENLAYER_NETWORK "${networkKey}". Options: ${Object.keys(CHAINS).join(", ")}`);
   process.exit(1);
 }
 
-const key = process.env.GENLAYER_PRIVATE_KEY?.trim();
+const key = (flag("key") || process.env.GENLAYER_PRIVATE_KEY)?.trim();
 const account = key ? createAccount(key.startsWith("0x") ? key : `0x${key}`) : createAccount();
 if (!key) {
   console.log("No GENLAYER_PRIVATE_KEY set — using an ephemeral account for this deployment.");
@@ -40,6 +53,41 @@ const code = readFileSync(source, "utf-8");
 console.log(`network:  ${networkKey}`);
 console.log(`deployer: ${account.address}`);
 console.log(`contract: ${source}`);
+
+/*
+ * Pre-flight balance check.
+ *
+ * Public testnets charge fees. Without this, an unfunded wallet fails deep
+ * inside the RPC layer with "Invalid parameters were provided" plus a buried
+ * funds message, which is a miserable way to learn you need a faucet.
+ */
+const rpcUrl = chain.rpcUrls?.default?.http?.[0];
+if (rpcUrl && networkKey.startsWith("testnet")) {
+  try {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_getBalance",
+        params: [account.address, "latest"],
+      }),
+    });
+    const body = await response.json();
+    const balance = BigInt(body.result ?? "0x0");
+    console.log(`balance:  ${balance} wei`);
+    if (balance === 0n) {
+      console.error("\nThis wallet has no GEN, so the deployment will be rejected.");
+      console.error(`Fund it at https://testnet-faucet.genlayer.foundation/`);
+      console.error(`  address: ${account.address}`);
+      console.error("\nThen run this command again.");
+      process.exit(1);
+    }
+  } catch {
+    console.log("balance:  could not be read; attempting deployment anyway");
+  }
+}
 
 const hash = await client.deployContract({ code, args: [], leaderOnly: false });
 console.log(`deploy tx: ${hash}`);
@@ -72,7 +120,38 @@ writeFileSync(
   )}\n`,
 );
 
+/*
+ * Also update the committed default so a fresh clone — and the submission's
+ * contract link — point at this deployment rather than a previous one.
+ */
+const committedFile = join(process.cwd(), "genlayer.deployment.json");
+writeFileSync(
+  committedFile,
+  `${JSON.stringify(
+    {
+      note: "Default RecourseAdjudicator deployment. Override with GENLAYER_CONTRACT_ADDRESS, or redeploy with `npm run genlayer:deploy`.",
+      network: networkKey,
+      address,
+      deployedAt: new Date().toISOString(),
+      deployTx: hash,
+    },
+    null,
+    2,
+  )}\n`,
+);
+
+const EXPLORERS = {
+  "testnet-asimov": "https://explorer-asimov.genlayer.com/address/",
+  "testnet-bradbury": "https://explorer-bradbury.genlayer.com/address/",
+  studionet: "https://studio.genlayer.com/contracts/",
+};
+
 console.log(`\nRecourseAdjudicator deployed`);
-console.log(`  address: ${address}`);
+console.log(`  address:     ${address}`);
 console.log(`  recorded in: ${outFile}`);
-console.log(`\nSet GENLAYER_CONTRACT_ADDRESS=${address} to pin this deployment.`);
+console.log(`  committed:   ${committedFile}`);
+if (EXPLORERS[networkKey]) {
+  console.log(`\nExplorer link (use this for the hackathon submission):`);
+  console.log(`  ${EXPLORERS[networkKey]}${address}`);
+}
+console.log(`\nPin it with GENLAYER_CONTRACT_ADDRESS=${address}`);

@@ -14,7 +14,8 @@
     "genlayer:deploy": "node scripts/genlayer-deploy.mjs",
     "genlayer:smoke": "node scripts/genlayer-smoke.mjs",
     "agents": "tsx server/agents.ts",
-    "agents:register": "tsx server/agents.ts register"
+    "agents:register": "tsx server/agents.ts register",
+    "wallet": "node scripts/new-wallet.mjs"
   },
   "dependencies": {
     "genlayer-js": "^1.1.8",

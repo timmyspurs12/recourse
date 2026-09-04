@@ -42,6 +42,7 @@ validators to rule.
 ```bash
 npm test               # 25 domain + adversarial tests, no network
 npm run test:live      # opt-in: two real adjudications on-network (buyer wins, merchant wins)
+npm run wallet                          # create a deployment wallet for a public testnet
 npm run agents generate shopper.agent   # register an agent and print its key once
 npm run agents list                     # who is bound to which key
 npm run genlayer:deploy    # deploy RecourseAdjudicator to a GenLayer network

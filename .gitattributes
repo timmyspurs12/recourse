@@ -1,0 +1,26 @@
+# Line endings.
+#
+# Shell scripts and the Dockerfile execute inside a Linux container. If Git
+# checks them out with CRLF on a Windows machine and that reaches the image,
+# the shebang becomes "#!/bin/sh\r" and Docker fails with
+#
+#   exec /usr/local/bin/docker-entrypoint.sh: no such file or directory
+#
+# which looks nothing like a line-ending problem. Pin them to LF everywhere.
+
+* text=auto
+
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.mjs       text eol=lf
+*.py        text eol=lf
+*.json      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+
+# Binary assets must never be normalised.
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.zip binary
