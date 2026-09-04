@@ -46,27 +46,19 @@ The programmable chargeback layer for autonomous commerce. Payments got autonomo
 
 ## 03 · Description (1000 max)
 
+**995 / 1000 characters — verified, pastes without truncation.**
+
 ```
-An AI agent can pay for something in 400ms without asking anyone. If what arrives is wrong, it has
-no move: no chargeback, no dispute form, no card network. Recourse makes the payment conditional on
-the promise.
+An AI agent can pay in 400ms without asking anyone. If what arrives is wrong it has no move: no chargeback, no dispute form, no card network. Recourse makes the payment conditional on the promise.
 
-Two agents agree machine-readable terms. The agreement is canonicalised and hashed BEFORE payment is
-captured into escrow, so neither side can change what was agreed afterwards. Delivery is verified
-deterministically — counting sources, comparing dates, matching strings is arithmetic, and code
-settles it instantly without ever calling a model. Only a genuinely semantic question ("were 2 of 5
-sources a MATERIAL breach?") reaches GenLayer, carrying the deterministic findings as established
-facts it may not recompute.
+Two agents agree machine-readable terms, hashed BEFORE payment is escrowed, so neither side can change what was agreed. Delivery is verified deterministically: counting sources and comparing dates is arithmetic, and code settles it instantly. That layer imports only node:crypto - it cannot call a model.
 
-The RecourseAdjudicator Intelligent Contract does not rubber-stamp the leader: each validator
-re-runs the judgment itself and must independently reach the same decision, then checks the ruling
-is internally coherent and stays inside the terms actually in contention. It rules both ways on the
-live network — buyer refunded on a real breach, merchant paid when the complaint was unjustified.
+Only a semantic question reaches GenLayer: were 2 of 5 sources a MATERIAL breach? Deterministic findings travel with it as facts it may not recompute.
 
-x402 is wrapped, not replaced. The only change: payTo is the protocol escrow, so payment arrives
-already bound to an agreement.
+Each validator re-runs the judgment itself and must independently reach the same decision - it does not rubber-stamp the leader. On the live network it rules both ways: buyer refunded on a real breach, merchant paid on an unjustified complaint.
+
+x402 is wrapped, not replaced: payTo is the escrow, so payment arrives bound to an agreement.
 ```
-*(~1,180 chars — trim the final paragraph to fit 1000 if the form rejects it.)*
 
 ## 04 · Demo video (optional, YouTube)
 
@@ -126,15 +118,11 @@ That last step is the one that wins arguments: it proves the layer is not a buye
 
 ## 06 · Review verification — expected outcome (500 max)
 
+**468 / 500 characters — verified.**
+
 ```
-npm run seed then npm run dev. At /demo choose "Promise breached" and run: the order reaches
-ESCROWED, verification records "2 < 5" as a BREACH in code, the dispute is submitted to
-RecourseAdjudicator on GenLayer studionet, and after ~25s of real consensus the ruling is
-BUYER_WINS and $1.00 is REFUNDED. The dispute page shows a real transaction hash and the
-validator votes the network reported. Choosing "Promise satisfied" instead releases to the
-merchant in ~2s with no adjudication. npm test → 39 passing.
+npm install && npm run seed && npm run dev. At /demo pick "Promise breached" and Run: verification records 2 < 5 as BREACH in code, the dispute goes to RecourseAdjudicator on GenLayer studionet, and after ~25s of real consensus the ruling is BUYER_WINS and $1.00 is REFUNDED. The dispute page shows a real tx hash and the validator votes the network reported. Then pick "Promise satisfied": released to the merchant in ~2s with no adjudication. npm test -> 40 passing.
 ```
-*(~490 chars)*
 
 ## 06 · Contract links (optional — but add it)
 
