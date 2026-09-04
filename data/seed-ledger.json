@@ -1,0 +1,2148 @@
+{
+  "sequence": 44,
+  "agents": {},
+  "orders": {
+    "RC-000038": {
+      "id": "RC-000038",
+      "ref": "RC/000038",
+      "state": "RELEASED",
+      "buyer": {
+        "handle": "procure.agent",
+        "operator": "Meridian Supply Desk"
+      },
+      "merchant": {
+        "handle": "datasmith.agent",
+        "operator": "Datasmith Labs"
+      },
+      "resource": {
+        "name": "Abuja Retail Footfall Sample",
+        "type": "digital_report"
+      },
+      "amount": {
+        "amount": "2.25",
+        "currency": "USDC"
+      },
+      "rail": "simulated",
+      "origin": "DEMO_FIXTURE",
+      "createdAt": "2026-09-04T13:15:39.100Z",
+      "updatedAt": "2026-09-04T13:15:39.123Z",
+      "deliveryDeadline": "2026-09-05T13:15:39.100Z",
+      "recourseWindowEndsAt": "2026-09-07T13:15:39.108Z"
+    },
+    "RC-000039": {
+      "id": "RC-000039",
+      "ref": "RC/000039",
+      "state": "ESCROWED",
+      "buyer": {
+        "handle": "procure.agent",
+        "operator": "Meridian Supply Desk"
+      },
+      "merchant": {
+        "handle": "ledgerworks.agent",
+        "operator": "Ledgerworks Data"
+      },
+      "resource": {
+        "name": "Nairobi Logistics Rate Card",
+        "type": "digital_report"
+      },
+      "amount": {
+        "amount": "2.50",
+        "currency": "USDC"
+      },
+      "rail": "simulated",
+      "origin": "DEMO_FIXTURE",
+      "createdAt": "2026-09-04T13:15:39.126Z",
+      "updatedAt": "2026-09-04T13:15:39.131Z",
+      "deliveryDeadline": "2026-09-05T13:15:39.126Z",
+      "recourseWindowEndsAt": "2026-09-07T13:15:39.131Z"
+    },
+    "RC-000040": {
+      "id": "RC-000040",
+      "ref": "RC/000040",
+      "state": "FULFILLED",
+      "buyer": {
+        "handle": "atlas.agent",
+        "operator": "Atlas Field Research"
+      },
+      "merchant": {
+        "handle": "datasmith.agent",
+        "operator": "Datasmith Labs"
+      },
+      "resource": {
+        "name": "Kano Agricultural Input Prices",
+        "type": "digital_report"
+      },
+      "amount": {
+        "amount": "1.75",
+        "currency": "USDC"
+      },
+      "rail": "simulated",
+      "origin": "DEMO_FIXTURE",
+      "createdAt": "2026-09-04T13:15:39.134Z",
+      "updatedAt": "2026-09-04T13:15:39.148Z",
+      "deliveryDeadline": "2026-09-05T13:15:39.134Z",
+      "recourseWindowEndsAt": "2026-09-07T13:15:39.140Z"
+    },
+    "RC-000041": {
+      "id": "RC-000041",
+      "ref": "RC/000041",
+      "state": "RELEASED",
+      "buyer": {
+        "handle": "shopper.agent",
+        "operator": "Northwind Retail Ops"
+      },
+      "merchant": {
+        "handle": "merchant.agent",
+        "operator": "Kestrel Research Collective"
+      },
+      "resource": {
+        "name": "Lagos Consumer Commerce Brief",
+        "type": "digital_report"
+      },
+      "amount": {
+        "amount": "1.00",
+        "currency": "USDC"
+      },
+      "rail": "simulated",
+      "origin": "DEMO_FIXTURE",
+      "createdAt": "2026-09-04T13:15:39.151Z",
+      "updatedAt": "2026-09-04T13:15:39.172Z",
+      "deliveryDeadline": "2026-09-05T13:15:39.151Z",
+      "recourseWindowEndsAt": "2026-09-07T13:15:39.159Z"
+    },
+    "RC-000042": {
+      "id": "RC-000042",
+      "ref": "RC/000042",
+      "state": "REFUNDED",
+      "buyer": {
+        "handle": "shopper.agent",
+        "operator": "Northwind Retail Ops"
+      },
+      "merchant": {
+        "handle": "merchant.agent",
+        "operator": "Kestrel Research Collective"
+      },
+      "resource": {
+        "name": "Lagos Consumer Commerce Brief",
+        "type": "digital_report"
+      },
+      "amount": {
+        "amount": "1.00",
+        "currency": "USDC"
+      },
+      "rail": "simulated",
+      "origin": "DEMO_FIXTURE",
+      "createdAt": "2026-09-04T13:15:39.176Z",
+      "updatedAt": "2026-09-04T13:15:47.374Z",
+      "deliveryDeadline": "2026-09-05T13:15:39.176Z",
+      "recourseWindowEndsAt": "2026-09-07T13:15:39.184Z"
+    },
+    "RC-000043": {
+      "id": "RC-000043",
+      "ref": "RC/000043",
+      "state": "ESCROWED",
+      "buyer": {
+        "handle": "atlas.agent",
+        "operator": "Atlas Field Research"
+      },
+      "merchant": {
+        "handle": "merchant.agent",
+        "operator": "Kestrel Research Collective"
+      },
+      "resource": {
+        "name": "Port Harcourt Fuel Retail Snapshot",
+        "type": "digital_report"
+      },
+      "amount": {
+        "amount": "3.00",
+        "currency": "USDC"
+      },
+      "rail": "simulated",
+      "origin": "DEMO_FIXTURE",
+      "createdAt": "2026-09-04T13:15:47.380Z",
+      "updatedAt": "2026-09-04T13:15:47.390Z",
+      "deliveryDeadline": "2026-09-05T13:15:47.380Z",
+      "recourseWindowEndsAt": "2026-09-07T13:15:47.391Z"
+    },
+    "RC-000044": {
+      "id": "RC-000044",
+      "ref": "RC/000044",
+      "state": "DISPUTED",
+      "buyer": {
+        "handle": "atlas.agent",
+        "operator": "Atlas Field Research"
+      },
+      "merchant": {
+        "handle": "ledgerworks.agent",
+        "operator": "Ledgerworks Data"
+      },
+      "resource": {
+        "name": "Abuja Telecom Coverage Audit",
+        "type": "digital_report"
+      },
+      "amount": {
+        "amount": "2.00",
+        "currency": "USDC"
+      },
+      "rail": "simulated",
+      "origin": "DEMO_FIXTURE",
+      "createdAt": "2026-09-04T13:15:47.395Z",
+      "updatedAt": "2026-09-04T13:15:47.425Z",
+      "deliveryDeadline": "2026-09-05T13:15:47.395Z",
+      "recourseWindowEndsAt": "2026-09-07T13:15:47.406Z"
+    }
+  },
+  "agreements": {
+    "RC-000038": {
+      "id": "agr_ac3fc0a7e066",
+      "orderId": "RC-000038",
+      "document": {
+        "version": "recourse/0.1",
+        "orderId": "RC-000038",
+        "buyer": "procure.agent",
+        "merchant": "datasmith.agent",
+        "resource": {
+          "name": "Abuja Retail Footfall Sample",
+          "type": "digital_report"
+        },
+        "payment": {
+          "amount": "2.25",
+          "currency": "USDC",
+          "rail": "simulated"
+        },
+        "terms": [
+          {
+            "id": "minimum_sources",
+            "label": "Minimum sources",
+            "operator": "GTE",
+            "expected": 3,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Independent sources corroborating the findings."
+          },
+          {
+            "id": "max_source_age_days",
+            "label": "Maximum source age",
+            "operator": "LTE",
+            "expected": 30,
+            "unit": "days",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "No source older than the stated window."
+          },
+          {
+            "id": "geography",
+            "label": "Geographic scope",
+            "operator": "MATCH",
+            "expected": "Abuja, Nigeria",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "The brief must cover the contracted market."
+          },
+          {
+            "id": "required_sections",
+            "label": "Required sections",
+            "operator": "EQ",
+            "expected": 3,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Demand, pricing, channel and competition."
+          },
+          {
+            "id": "material_accuracy",
+            "label": "Material accuracy",
+            "operator": "JUDGMENT",
+            "expected": "No material misstatement of the Lagos consumer market",
+            "mandatory": true,
+            "evaluation": "SEMANTIC",
+            "description": "The only term the protocol cannot settle with arithmetic."
+          }
+        ],
+        "refundPolicy": {
+          "type": "mandatory_term_breach",
+          "settlement": "full_refund",
+          "recourseWindowHours": 72
+        },
+        "deliveryDeadline": "2026-09-05T13:15:39.100Z",
+        "createdAt": "2026-09-04T13:15:39.100Z"
+      },
+      "hash": "0x9cfdd897b28ec9145a443a1d3b2e1795632c71746146b9e345c98e2a834fe16b",
+      "lockedAt": "2026-09-04T13:15:39.105Z"
+    },
+    "RC-000039": {
+      "id": "agr_956d3181fa79",
+      "orderId": "RC-000039",
+      "document": {
+        "version": "recourse/0.1",
+        "orderId": "RC-000039",
+        "buyer": "procure.agent",
+        "merchant": "ledgerworks.agent",
+        "resource": {
+          "name": "Nairobi Logistics Rate Card",
+          "type": "digital_report"
+        },
+        "payment": {
+          "amount": "2.50",
+          "currency": "USDC",
+          "rail": "simulated"
+        },
+        "terms": [
+          {
+            "id": "minimum_sources",
+            "label": "Minimum sources",
+            "operator": "GTE",
+            "expected": 5,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Independent sources corroborating the findings."
+          },
+          {
+            "id": "max_source_age_days",
+            "label": "Maximum source age",
+            "operator": "LTE",
+            "expected": 21,
+            "unit": "days",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "No source older than the stated window."
+          },
+          {
+            "id": "geography",
+            "label": "Geographic scope",
+            "operator": "MATCH",
+            "expected": "Nairobi, Kenya",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "The brief must cover the contracted market."
+          },
+          {
+            "id": "required_sections",
+            "label": "Required sections",
+            "operator": "EQ",
+            "expected": 3,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Demand, pricing, channel and competition."
+          },
+          {
+            "id": "material_accuracy",
+            "label": "Material accuracy",
+            "operator": "JUDGMENT",
+            "expected": "No material misstatement of the Lagos consumer market",
+            "mandatory": true,
+            "evaluation": "SEMANTIC",
+            "description": "The only term the protocol cannot settle with arithmetic."
+          }
+        ],
+        "refundPolicy": {
+          "type": "mandatory_term_breach",
+          "settlement": "full_refund",
+          "recourseWindowHours": 72
+        },
+        "deliveryDeadline": "2026-09-05T13:15:39.126Z",
+        "createdAt": "2026-09-04T13:15:39.126Z"
+      },
+      "hash": "0x9918f4cebe66715588485c4166292d63c6ca9d40a5746c91270022bb982a920b",
+      "lockedAt": "2026-09-04T13:15:39.129Z"
+    },
+    "RC-000040": {
+      "id": "agr_2201f6e6f058",
+      "orderId": "RC-000040",
+      "document": {
+        "version": "recourse/0.1",
+        "orderId": "RC-000040",
+        "buyer": "atlas.agent",
+        "merchant": "datasmith.agent",
+        "resource": {
+          "name": "Kano Agricultural Input Prices",
+          "type": "digital_report"
+        },
+        "payment": {
+          "amount": "1.75",
+          "currency": "USDC",
+          "rail": "simulated"
+        },
+        "terms": [
+          {
+            "id": "minimum_sources",
+            "label": "Minimum sources",
+            "operator": "GTE",
+            "expected": 4,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Independent sources corroborating the findings."
+          },
+          {
+            "id": "max_source_age_days",
+            "label": "Maximum source age",
+            "operator": "LTE",
+            "expected": 30,
+            "unit": "days",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "No source older than the stated window."
+          },
+          {
+            "id": "geography",
+            "label": "Geographic scope",
+            "operator": "MATCH",
+            "expected": "Kano, Nigeria",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "The brief must cover the contracted market."
+          },
+          {
+            "id": "required_sections",
+            "label": "Required sections",
+            "operator": "EQ",
+            "expected": 4,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Demand, pricing, channel and competition."
+          },
+          {
+            "id": "material_accuracy",
+            "label": "Material accuracy",
+            "operator": "JUDGMENT",
+            "expected": "No material misstatement of the Lagos consumer market",
+            "mandatory": true,
+            "evaluation": "SEMANTIC",
+            "description": "The only term the protocol cannot settle with arithmetic."
+          }
+        ],
+        "refundPolicy": {
+          "type": "mandatory_term_breach",
+          "settlement": "full_refund",
+          "recourseWindowHours": 72
+        },
+        "deliveryDeadline": "2026-09-05T13:15:39.134Z",
+        "createdAt": "2026-09-04T13:15:39.134Z"
+      },
+      "hash": "0x2c623d2860b5b58de2195037c3bd5824d9fdfd1ec60b4768e5941fd61a5d80d0",
+      "lockedAt": "2026-09-04T13:15:39.137Z"
+    },
+    "RC-000041": {
+      "id": "agr_d15d28162024",
+      "orderId": "RC-000041",
+      "document": {
+        "version": "recourse/0.1",
+        "orderId": "RC-000041",
+        "buyer": "shopper.agent",
+        "merchant": "merchant.agent",
+        "resource": {
+          "name": "Lagos Consumer Commerce Brief",
+          "type": "digital_report"
+        },
+        "payment": {
+          "amount": "1.00",
+          "currency": "USDC",
+          "rail": "simulated"
+        },
+        "terms": [
+          {
+            "id": "minimum_sources",
+            "label": "Minimum sources",
+            "operator": "GTE",
+            "expected": 5,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Independent sources corroborating the findings."
+          },
+          {
+            "id": "max_source_age_days",
+            "label": "Maximum source age",
+            "operator": "LTE",
+            "expected": 30,
+            "unit": "days",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "No source older than the stated window."
+          },
+          {
+            "id": "geography",
+            "label": "Geographic scope",
+            "operator": "MATCH",
+            "expected": "Lagos, Nigeria",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "The brief must cover the contracted market."
+          },
+          {
+            "id": "required_sections",
+            "label": "Required sections",
+            "operator": "EQ",
+            "expected": 4,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Demand, pricing, channel and competition."
+          },
+          {
+            "id": "material_accuracy",
+            "label": "Material accuracy",
+            "operator": "JUDGMENT",
+            "expected": "No material misstatement of the Lagos consumer market",
+            "mandatory": true,
+            "evaluation": "SEMANTIC",
+            "description": "The only term the protocol cannot settle with arithmetic."
+          }
+        ],
+        "refundPolicy": {
+          "type": "mandatory_term_breach",
+          "settlement": "full_refund",
+          "recourseWindowHours": 72
+        },
+        "deliveryDeadline": "2026-09-05T13:15:39.151Z",
+        "createdAt": "2026-09-04T13:15:39.151Z"
+      },
+      "hash": "0xbd18761b7f28eff1bc6b48effda8c3418cacf0a9f83dd4cba7c72d6cdee78794",
+      "lockedAt": "2026-09-04T13:15:39.154Z"
+    },
+    "RC-000042": {
+      "id": "agr_05cd901073aa",
+      "orderId": "RC-000042",
+      "document": {
+        "version": "recourse/0.1",
+        "orderId": "RC-000042",
+        "buyer": "shopper.agent",
+        "merchant": "merchant.agent",
+        "resource": {
+          "name": "Lagos Consumer Commerce Brief",
+          "type": "digital_report"
+        },
+        "payment": {
+          "amount": "1.00",
+          "currency": "USDC",
+          "rail": "simulated"
+        },
+        "terms": [
+          {
+            "id": "minimum_sources",
+            "label": "Minimum sources",
+            "operator": "GTE",
+            "expected": 5,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Independent sources corroborating the findings."
+          },
+          {
+            "id": "max_source_age_days",
+            "label": "Maximum source age",
+            "operator": "LTE",
+            "expected": 30,
+            "unit": "days",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "No source older than the stated window."
+          },
+          {
+            "id": "geography",
+            "label": "Geographic scope",
+            "operator": "MATCH",
+            "expected": "Lagos, Nigeria",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "The brief must cover the contracted market."
+          },
+          {
+            "id": "required_sections",
+            "label": "Required sections",
+            "operator": "EQ",
+            "expected": 4,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Demand, pricing, channel and competition."
+          },
+          {
+            "id": "material_accuracy",
+            "label": "Material accuracy",
+            "operator": "JUDGMENT",
+            "expected": "No material misstatement of the Lagos consumer market",
+            "mandatory": true,
+            "evaluation": "SEMANTIC",
+            "description": "The only term the protocol cannot settle with arithmetic."
+          }
+        ],
+        "refundPolicy": {
+          "type": "mandatory_term_breach",
+          "settlement": "full_refund",
+          "recourseWindowHours": 72
+        },
+        "deliveryDeadline": "2026-09-05T13:15:39.176Z",
+        "createdAt": "2026-09-04T13:15:39.176Z"
+      },
+      "hash": "0x9c2e814c483563a9d6a7d5f2a864bbadebee9ae6fdda86d1f3f9e73d58860626",
+      "lockedAt": "2026-09-04T13:15:39.180Z"
+    },
+    "RC-000043": {
+      "id": "agr_4ec906d1648c",
+      "orderId": "RC-000043",
+      "document": {
+        "version": "recourse/0.1",
+        "orderId": "RC-000043",
+        "buyer": "atlas.agent",
+        "merchant": "merchant.agent",
+        "resource": {
+          "name": "Port Harcourt Fuel Retail Snapshot",
+          "type": "digital_report"
+        },
+        "payment": {
+          "amount": "3.00",
+          "currency": "USDC",
+          "rail": "simulated"
+        },
+        "terms": [
+          {
+            "id": "minimum_sources",
+            "label": "Minimum sources",
+            "operator": "GTE",
+            "expected": 6,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Independent sources corroborating the findings."
+          },
+          {
+            "id": "max_source_age_days",
+            "label": "Maximum source age",
+            "operator": "LTE",
+            "expected": 30,
+            "unit": "days",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "No source older than the stated window."
+          },
+          {
+            "id": "geography",
+            "label": "Geographic scope",
+            "operator": "MATCH",
+            "expected": "Port Harcourt, Nigeria",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "The brief must cover the contracted market."
+          },
+          {
+            "id": "required_sections",
+            "label": "Required sections",
+            "operator": "EQ",
+            "expected": 4,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Demand, pricing, channel and competition."
+          },
+          {
+            "id": "material_accuracy",
+            "label": "Material accuracy",
+            "operator": "JUDGMENT",
+            "expected": "No material misstatement of the Lagos consumer market",
+            "mandatory": true,
+            "evaluation": "SEMANTIC",
+            "description": "The only term the protocol cannot settle with arithmetic."
+          }
+        ],
+        "refundPolicy": {
+          "type": "mandatory_term_breach",
+          "settlement": "full_refund",
+          "recourseWindowHours": 72
+        },
+        "deliveryDeadline": "2026-09-05T13:15:47.380Z",
+        "createdAt": "2026-09-04T13:15:47.380Z"
+      },
+      "hash": "0x4a6eaa9e5196c0b0cd5740e778f351aa8fc1c9d6ad80d7ca799eea291d32f19c",
+      "lockedAt": "2026-09-04T13:15:47.388Z"
+    },
+    "RC-000044": {
+      "id": "agr_b2f2d29b45c3",
+      "orderId": "RC-000044",
+      "document": {
+        "version": "recourse/0.1",
+        "orderId": "RC-000044",
+        "buyer": "atlas.agent",
+        "merchant": "ledgerworks.agent",
+        "resource": {
+          "name": "Abuja Telecom Coverage Audit",
+          "type": "digital_report"
+        },
+        "payment": {
+          "amount": "2.00",
+          "currency": "USDC",
+          "rail": "simulated"
+        },
+        "terms": [
+          {
+            "id": "minimum_sources",
+            "label": "Minimum sources",
+            "operator": "GTE",
+            "expected": 5,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Independent sources corroborating the findings."
+          },
+          {
+            "id": "max_source_age_days",
+            "label": "Maximum source age",
+            "operator": "LTE",
+            "expected": 30,
+            "unit": "days",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "No source older than the stated window."
+          },
+          {
+            "id": "geography",
+            "label": "Geographic scope",
+            "operator": "MATCH",
+            "expected": "Abuja, Nigeria",
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "The brief must cover the contracted market."
+          },
+          {
+            "id": "required_sections",
+            "label": "Required sections",
+            "operator": "EQ",
+            "expected": 4,
+            "mandatory": true,
+            "evaluation": "DETERMINISTIC",
+            "description": "Demand, pricing, channel and competition."
+          },
+          {
+            "id": "material_accuracy",
+            "label": "Material accuracy",
+            "operator": "JUDGMENT",
+            "expected": "No material misstatement of the Lagos consumer market",
+            "mandatory": true,
+            "evaluation": "SEMANTIC",
+            "description": "The only term the protocol cannot settle with arithmetic."
+          }
+        ],
+        "refundPolicy": {
+          "type": "mandatory_term_breach",
+          "settlement": "full_refund",
+          "recourseWindowHours": 72
+        },
+        "deliveryDeadline": "2026-09-05T13:15:47.395Z",
+        "createdAt": "2026-09-04T13:15:47.395Z"
+      },
+      "hash": "0xe913104c1383bb2bc33fe4fc3c276d1379148fabdadce0b1a97656eaecfaf82e",
+      "lockedAt": "2026-09-04T13:15:47.401Z"
+    }
+  },
+  "payments": {
+    "RC-000038": {
+      "id": "pay_ae34f8396e4c",
+      "orderId": "RC-000038",
+      "rail": "simulated",
+      "amount": {
+        "amount": "2.25",
+        "currency": "USDC"
+      },
+      "escrow": "RELEASED",
+      "reference": "sim_d8f049dc31991db0",
+      "authorizationVerified": false,
+      "payer": "simulated.buyer",
+      "payee": "recourse.escrow",
+      "network": "SIMULATED",
+      "transactionHash": null,
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "initiatedAt": "2026-09-04T13:15:39.105Z",
+      "confirmedAt": "2026-09-04T13:15:39.105Z"
+    },
+    "RC-000039": {
+      "id": "pay_0297fb87ef6b",
+      "orderId": "RC-000039",
+      "rail": "simulated",
+      "amount": {
+        "amount": "2.50",
+        "currency": "USDC"
+      },
+      "escrow": "HELD",
+      "reference": "sim_9501808807cff520",
+      "authorizationVerified": false,
+      "payer": "simulated.buyer",
+      "payee": "recourse.escrow",
+      "network": "SIMULATED",
+      "transactionHash": null,
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "initiatedAt": "2026-09-04T13:15:39.129Z",
+      "confirmedAt": "2026-09-04T13:15:39.129Z"
+    },
+    "RC-000040": {
+      "id": "pay_ab2ebf91c840",
+      "orderId": "RC-000040",
+      "rail": "simulated",
+      "amount": {
+        "amount": "1.75",
+        "currency": "USDC"
+      },
+      "escrow": "HELD",
+      "reference": "sim_ea349f618028c91c",
+      "authorizationVerified": false,
+      "payer": "simulated.buyer",
+      "payee": "recourse.escrow",
+      "network": "SIMULATED",
+      "transactionHash": null,
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "initiatedAt": "2026-09-04T13:15:39.137Z",
+      "confirmedAt": "2026-09-04T13:15:39.137Z"
+    },
+    "RC-000041": {
+      "id": "pay_a88ff57235c2",
+      "orderId": "RC-000041",
+      "rail": "simulated",
+      "amount": {
+        "amount": "1.00",
+        "currency": "USDC"
+      },
+      "escrow": "RELEASED",
+      "reference": "sim_5a520f120f1c05ab",
+      "authorizationVerified": false,
+      "payer": "simulated.buyer",
+      "payee": "recourse.escrow",
+      "network": "SIMULATED",
+      "transactionHash": null,
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "initiatedAt": "2026-09-04T13:15:39.154Z",
+      "confirmedAt": "2026-09-04T13:15:39.154Z"
+    },
+    "RC-000042": {
+      "id": "pay_f3e8112a743d",
+      "orderId": "RC-000042",
+      "rail": "simulated",
+      "amount": {
+        "amount": "1.00",
+        "currency": "USDC"
+      },
+      "escrow": "REFUNDED",
+      "reference": "sim_0a91688cac89ba78",
+      "authorizationVerified": false,
+      "payer": "simulated.buyer",
+      "payee": "recourse.escrow",
+      "network": "SIMULATED",
+      "transactionHash": null,
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "initiatedAt": "2026-09-04T13:15:39.180Z",
+      "confirmedAt": "2026-09-04T13:15:39.180Z"
+    },
+    "RC-000043": {
+      "id": "pay_dbbfa0142df4",
+      "orderId": "RC-000043",
+      "rail": "simulated",
+      "amount": {
+        "amount": "3.00",
+        "currency": "USDC"
+      },
+      "escrow": "HELD",
+      "reference": "sim_f435e1fe7b920728",
+      "authorizationVerified": false,
+      "payer": "simulated.buyer",
+      "payee": "recourse.escrow",
+      "network": "SIMULATED",
+      "transactionHash": null,
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "initiatedAt": "2026-09-04T13:15:47.385Z",
+      "confirmedAt": "2026-09-04T13:15:47.387Z"
+    },
+    "RC-000044": {
+      "id": "pay_07781c857d4c",
+      "orderId": "RC-000044",
+      "rail": "simulated",
+      "amount": {
+        "amount": "2.00",
+        "currency": "USDC"
+      },
+      "escrow": "HELD",
+      "reference": "sim_c75d7c34a77664d8",
+      "authorizationVerified": false,
+      "payer": "simulated.buyer",
+      "payee": "recourse.escrow",
+      "network": "SIMULATED",
+      "transactionHash": null,
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "initiatedAt": "2026-09-04T13:15:47.401Z",
+      "confirmedAt": "2026-09-04T13:15:47.401Z"
+    }
+  },
+  "paymentReferences": {
+    "sim_d8f049dc31991db0": "RC-000038",
+    "sim_9501808807cff520": "RC-000039",
+    "sim_ea349f618028c91c": "RC-000040",
+    "sim_5a520f120f1c05ab": "RC-000041",
+    "sim_0a91688cac89ba78": "RC-000042",
+    "sim_f435e1fe7b920728": "RC-000043",
+    "sim_c75d7c34a77664d8": "RC-000044"
+  },
+  "deliveries": {
+    "RC-000038": {
+      "id": "dlv_4133f6639107",
+      "orderId": "RC-000038",
+      "statement": "Footfall sample delivered with three corroborating sources.",
+      "artifactUrl": null,
+      "artifactHash": "0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+      "assertions": {
+        "sourceCount": 4,
+        "sectionCount": 3,
+        "maxSourceAgeDays": 8,
+        "geography": "Abuja, Nigeria",
+        "format": "JSON",
+        "summary": "Footfall counts across three Abuja retail corridors."
+      },
+      "evidence": [
+        {
+          "id": "evd_e66907e26968",
+          "deliveryId": "dlv_4133f6639107",
+          "orderId": "RC-000038",
+          "index": 1,
+          "kind": "sensor",
+          "source": "Corridor sensor array, Wuse II",
+          "submittedAt": "2026-09-04T13:15:39.110Z",
+          "sourceAgeDays": 8,
+          "checksum": "0x299d31a93be3bb698cd69bd80e3400436637ba91b75e90b05187378b9b1ddd60"
+        },
+        {
+          "id": "evd_843c31332a19",
+          "deliveryId": "dlv_4133f6639107",
+          "orderId": "RC-000038",
+          "index": 2,
+          "kind": "survey",
+          "source": "Retail operator survey",
+          "submittedAt": "2026-09-04T13:15:39.110Z",
+          "sourceAgeDays": 5,
+          "checksum": "0x73c31b7c84607beb59c73a6799165820416234cbea1500b5f7279814b3e1d449"
+        },
+        {
+          "id": "evd_a8fe4bcb5774",
+          "deliveryId": "dlv_4133f6639107",
+          "orderId": "RC-000038",
+          "index": 3,
+          "kind": "registry",
+          "source": "Mall tenancy registry",
+          "submittedAt": "2026-09-04T13:15:39.110Z",
+          "sourceAgeDays": 6,
+          "checksum": "0x812d7e0b4bcf3a88038676ed875781b3828559642bcc58ae4a21c433e0fd039a"
+        }
+      ],
+      "evidenceHash": "0x4ece62df693fdc350a308f52ff0a2f54f3b3187d9caf40650237d7001e8dbad0",
+      "submittedAt": "2026-09-04T13:15:39.110Z",
+      "unavailableReason": null
+    },
+    "RC-000040": {
+      "id": "dlv_76c58c9329d2",
+      "orderId": "RC-000040",
+      "statement": "Input price series delivered across four markets.",
+      "artifactUrl": null,
+      "artifactHash": "0xd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2",
+      "assertions": {
+        "sourceCount": 5,
+        "sectionCount": 4,
+        "maxSourceAgeDays": 14,
+        "geography": "Kano, Nigeria",
+        "format": "JSON",
+        "summary": "Fertiliser, seed and feed prices across four Kano markets."
+      },
+      "evidence": [
+        {
+          "id": "evd_dacc291c5384",
+          "deliveryId": "dlv_76c58c9329d2",
+          "orderId": "RC-000040",
+          "index": 1,
+          "kind": "pricing",
+          "source": "Dawanau market price board",
+          "submittedAt": "2026-09-04T13:15:39.142Z",
+          "sourceAgeDays": 3,
+          "checksum": "0xb2a10bf7cf385c813586c85a8893d311f03e4790e603f65f996a590145a46828"
+        },
+        {
+          "id": "evd_b173b17bbc1e",
+          "deliveryId": "dlv_76c58c9329d2",
+          "orderId": "RC-000040",
+          "index": 2,
+          "kind": "pricing",
+          "source": "Yankaba market price board",
+          "submittedAt": "2026-09-04T13:15:39.142Z",
+          "sourceAgeDays": 4,
+          "checksum": "0x4231991bfbc28505a4e3faf615e09064aa8708c2cbf266cf860ce5b7a68bb701"
+        },
+        {
+          "id": "evd_802b44cd543a",
+          "deliveryId": "dlv_76c58c9329d2",
+          "orderId": "RC-000040",
+          "index": 3,
+          "kind": "survey",
+          "source": "Cooperative buyer survey",
+          "submittedAt": "2026-09-04T13:15:39.142Z",
+          "sourceAgeDays": 14,
+          "checksum": "0xcf25ae13ca322f52f37b12ae33b4224fb6dbabb46d620519034be5c790afee27"
+        },
+        {
+          "id": "evd_357948ca4106",
+          "deliveryId": "dlv_76c58c9329d2",
+          "orderId": "RC-000040",
+          "index": 4,
+          "kind": "registry",
+          "source": "State agricultural bulletin",
+          "submittedAt": "2026-09-04T13:15:39.142Z",
+          "sourceAgeDays": 10,
+          "checksum": "0x151f44ceedcd047ec9d7edfadb3f8149692b80bdbea0c25c35da030f004272dd"
+        },
+        {
+          "id": "evd_c4c889f91c90",
+          "deliveryId": "dlv_76c58c9329d2",
+          "orderId": "RC-000040",
+          "index": 5,
+          "kind": "interview",
+          "source": "Input distributor interviews",
+          "submittedAt": "2026-09-04T13:15:39.142Z",
+          "sourceAgeDays": 6,
+          "checksum": "0xffc8f94aaf7801b2a8e7c9c96e6db0fe1016e10d54b59b10da3af7aaa5a140c0"
+        }
+      ],
+      "evidenceHash": "0x4bc1de55f6b55347ca45c5687b58c4c6f0d8fdb75bbd1118bf83c67fd5e58b17",
+      "submittedAt": "2026-09-04T13:15:39.142Z",
+      "unavailableReason": null
+    },
+    "RC-000041": {
+      "id": "dlv_8ce8e9eeecfc",
+      "orderId": "RC-000041",
+      "statement": "Brief delivered in JSON. Six independent sources, all within 30 days, Lagos-scoped, four required sections present.",
+      "artifactUrl": "https://kestrel.example/briefs/lagos-consumer-commerce.json",
+      "artifactHash": "0xa4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+      "assertions": {
+        "sourceCount": 6,
+        "sectionCount": 4,
+        "maxSourceAgeDays": 12,
+        "geography": "Lagos, Nigeria",
+        "format": "JSON",
+        "summary": "Consumer demand, pricing bands, channel mix and competitive set for Lagos, corroborated across six sources."
+      },
+      "evidence": [
+        {
+          "id": "evd_b36ee8ad9dc4",
+          "deliveryId": "dlv_8ce8e9eeecfc",
+          "orderId": "RC-000041",
+          "index": 1,
+          "kind": "survey",
+          "source": "Lagos Household Consumption Panel, wave 42",
+          "submittedAt": "2026-09-04T13:15:39.162Z",
+          "sourceAgeDays": 9,
+          "checksum": "0xc28f2b6886330b3ab6a0e54250c8191cc2ae16119f6965035b74b694027d8365"
+        },
+        {
+          "id": "evd_e0fa5a16bba7",
+          "deliveryId": "dlv_8ce8e9eeecfc",
+          "orderId": "RC-000041",
+          "index": 2,
+          "kind": "registry",
+          "source": "Nigeria Bureau of Statistics retail index",
+          "submittedAt": "2026-09-04T13:15:39.162Z",
+          "sourceAgeDays": 12,
+          "checksum": "0x0b102a4cd823372559b6125e32b671b0d8bbcc4463e26ee2e8c98b83bdb3e70c"
+        },
+        {
+          "id": "evd_368a5f76e365",
+          "deliveryId": "dlv_8ce8e9eeecfc",
+          "orderId": "RC-000041",
+          "index": 3,
+          "kind": "pricing",
+          "source": "Kestrel Lagos price sweep, 61 SKUs",
+          "submittedAt": "2026-09-04T13:15:39.162Z",
+          "sourceAgeDays": 4,
+          "checksum": "0x496c588ccc107f21fce0f0eedcf2c8b6e6fd7655600109876cbb0423f2be9373"
+        },
+        {
+          "id": "evd_a5238c31bc01",
+          "deliveryId": "dlv_8ce8e9eeecfc",
+          "orderId": "RC-000041",
+          "index": 4,
+          "kind": "interview",
+          "source": "Distributor interviews, Ikeja and Lekki",
+          "submittedAt": "2026-09-04T13:15:39.162Z",
+          "sourceAgeDays": 7,
+          "checksum": "0x496706f6f5a8364d4aa02d5a5baeb48ae91c686aba1c8cc214dd354f0dcc1bdc"
+        },
+        {
+          "id": "evd_3d243ea316c1",
+          "deliveryId": "dlv_8ce8e9eeecfc",
+          "orderId": "RC-000041",
+          "index": 5,
+          "kind": "registry",
+          "source": "Corporate Affairs Commission filings",
+          "submittedAt": "2026-09-04T13:15:39.162Z",
+          "sourceAgeDays": 11,
+          "checksum": "0x644994af81d7ea1eb0d0cdd80500a2bb4f43b9c750cf897bf1c16d513a31297a"
+        },
+        {
+          "id": "evd_3a68fc3772fa",
+          "deliveryId": "dlv_8ce8e9eeecfc",
+          "orderId": "RC-000041",
+          "index": 6,
+          "kind": "pricing",
+          "source": "Open marketplace listing scrape",
+          "submittedAt": "2026-09-04T13:15:39.162Z",
+          "sourceAgeDays": 3,
+          "checksum": "0x3bb2d594c622c5ccefe1b3334f1226eb3bd4d24ff4d7469a3bdfbe6447ce55fa"
+        }
+      ],
+      "evidenceHash": "0x3e85f8c20ca9489d9d3c80d9d508b7ab2de64ba07055cf4d20434b21704e3c64",
+      "submittedAt": "2026-09-04T13:15:39.162Z",
+      "unavailableReason": null
+    },
+    "RC-000042": {
+      "id": "dlv_702d0249fb26",
+      "orderId": "RC-000042",
+      "statement": "Brief delivered in JSON. Lagos-scoped with all four sections. Two sources were available within the window; the remaining corroboration could not be secured before the deadline.",
+      "artifactUrl": "https://kestrel.example/briefs/lagos-consumer-commerce-partial.json",
+      "artifactHash": "0xb7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7",
+      "assertions": {
+        "sourceCount": 2,
+        "sectionCount": 4,
+        "maxSourceAgeDays": 11,
+        "geography": "Lagos, Nigeria",
+        "format": "JSON",
+        "summary": "Consumer demand, pricing bands, channel mix and competitive set for Lagos, corroborated across two sources."
+      },
+      "evidence": [
+        {
+          "id": "evd_4be2ecbb095f",
+          "deliveryId": "dlv_702d0249fb26",
+          "orderId": "RC-000042",
+          "index": 1,
+          "kind": "survey",
+          "source": "Lagos Household Consumption Panel, wave 42",
+          "submittedAt": "2026-09-04T13:15:39.186Z",
+          "sourceAgeDays": 9,
+          "checksum": "0x0ece6c44e280e1d4fe6997fa1f48c9d1c1a16d291758a27fee611e153267a694"
+        },
+        {
+          "id": "evd_be8db4b26a75",
+          "deliveryId": "dlv_702d0249fb26",
+          "orderId": "RC-000042",
+          "index": 2,
+          "kind": "pricing",
+          "source": "Kestrel Lagos price sweep, 61 SKUs",
+          "submittedAt": "2026-09-04T13:15:39.186Z",
+          "sourceAgeDays": 11,
+          "checksum": "0x8bae87301274b3585da4aa08afa25349e10ad73785533f1bbb939be2ac03a649"
+        }
+      ],
+      "evidenceHash": "0xa9c42e8053336481e6d0216d249dbea4975bed978ee2ab56f1c552711401ca62",
+      "submittedAt": "2026-09-04T13:15:39.186Z",
+      "unavailableReason": null
+    },
+    "RC-000044": {
+      "id": "dlv_3c623fcdb8cd",
+      "orderId": "RC-000044",
+      "statement": "Coverage audit delivered for three of the five contracted corridors.",
+      "artifactUrl": null,
+      "artifactHash": "0xe3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+      "assertions": {
+        "sourceCount": 3,
+        "sectionCount": 4,
+        "maxSourceAgeDays": 16,
+        "geography": "Abuja, Nigeria",
+        "format": "JSON",
+        "summary": "Signal strength and dropout rates for three Abuja corridors."
+      },
+      "evidence": [
+        {
+          "id": "evd_854db8a0fe11",
+          "deliveryId": "dlv_3c623fcdb8cd",
+          "orderId": "RC-000044",
+          "index": 1,
+          "kind": "sensor",
+          "source": "Drive-test corridor A",
+          "submittedAt": "2026-09-04T13:15:47.409Z",
+          "sourceAgeDays": 16,
+          "checksum": "0x616ba3fd79c59d4fd7081fbbd95b9fe3820867837db5ef1e2e6859224f538e8d"
+        },
+        {
+          "id": "evd_35c1085d0094",
+          "deliveryId": "dlv_3c623fcdb8cd",
+          "orderId": "RC-000044",
+          "index": 2,
+          "kind": "sensor",
+          "source": "Drive-test corridor B",
+          "submittedAt": "2026-09-04T13:15:47.409Z",
+          "sourceAgeDays": 15,
+          "checksum": "0x6fac6141d668e75e9c4dcdec69cdad9e5cb1c395cb1319fec082bb3b910e6531"
+        },
+        {
+          "id": "evd_0f13e75db93b",
+          "deliveryId": "dlv_3c623fcdb8cd",
+          "orderId": "RC-000044",
+          "index": 3,
+          "kind": "registry",
+          "source": "Regulator coverage filing",
+          "submittedAt": "2026-09-04T13:15:47.409Z",
+          "sourceAgeDays": 9,
+          "checksum": "0x331d3613f843b273abf4e43413cb09b0631ee81aca24d1f87b6aa3f2f665f0a7"
+        }
+      ],
+      "evidenceHash": "0x96e7471c0f0f18f36d240be8b4552702679bd2f8ff4b5b0084107de5b1bce4dc",
+      "submittedAt": "2026-09-04T13:15:47.409Z",
+      "unavailableReason": null
+    }
+  },
+  "verifications": {
+    "RC-000038": {
+      "orderId": "RC-000038",
+      "engine": "recourse/deterministic@0.4",
+      "checks": [
+        {
+          "termId": "minimum_sources",
+          "label": "Minimum sources",
+          "expression": "4 \u2265 3",
+          "expected": "3",
+          "observed": "4",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "max_source_age_days",
+          "label": "Maximum source age",
+          "expression": "8 \u2264 30",
+          "expected": "30 days",
+          "observed": "8 days",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "geography",
+          "label": "Geographic scope",
+          "expression": "Abuja, Nigeria = Abuja, Nigeria",
+          "expected": "Abuja, Nigeria",
+          "observed": "Abuja, Nigeria",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "required_sections",
+          "label": "Required sections",
+          "expression": "3 = 3",
+          "expected": "3",
+          "observed": "3",
+          "result": "PASS",
+          "mandatory": true
+        }
+      ],
+      "semanticQuestions": [
+        {
+          "termId": "material_accuracy",
+          "label": "Material accuracy",
+          "question": "No material misstatement of the Lagos consumer market",
+          "reason": "No arithmetic or string comparison can settle this term."
+        }
+      ],
+      "outcome": "SATISFIED",
+      "breachedTermIds": [],
+      "executedAt": "2026-09-04T13:15:39.115Z"
+    },
+    "RC-000040": {
+      "orderId": "RC-000040",
+      "engine": "recourse/deterministic@0.4",
+      "checks": [
+        {
+          "termId": "minimum_sources",
+          "label": "Minimum sources",
+          "expression": "5 \u2265 4",
+          "expected": "4",
+          "observed": "5",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "max_source_age_days",
+          "label": "Maximum source age",
+          "expression": "14 \u2264 30",
+          "expected": "30 days",
+          "observed": "14 days",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "geography",
+          "label": "Geographic scope",
+          "expression": "Kano, Nigeria = Kano, Nigeria",
+          "expected": "Kano, Nigeria",
+          "observed": "Kano, Nigeria",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "required_sections",
+          "label": "Required sections",
+          "expression": "4 = 4",
+          "expected": "4",
+          "observed": "4",
+          "result": "PASS",
+          "mandatory": true
+        }
+      ],
+      "semanticQuestions": [
+        {
+          "termId": "material_accuracy",
+          "label": "Material accuracy",
+          "question": "No material misstatement of the Lagos consumer market",
+          "reason": "No arithmetic or string comparison can settle this term."
+        }
+      ],
+      "outcome": "SATISFIED",
+      "breachedTermIds": [],
+      "executedAt": "2026-09-04T13:15:39.147Z"
+    },
+    "RC-000041": {
+      "orderId": "RC-000041",
+      "engine": "recourse/deterministic@0.4",
+      "checks": [
+        {
+          "termId": "minimum_sources",
+          "label": "Minimum sources",
+          "expression": "6 \u2265 5",
+          "expected": "5",
+          "observed": "6",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "max_source_age_days",
+          "label": "Maximum source age",
+          "expression": "12 \u2264 30",
+          "expected": "30 days",
+          "observed": "12 days",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "geography",
+          "label": "Geographic scope",
+          "expression": "Lagos, Nigeria = Lagos, Nigeria",
+          "expected": "Lagos, Nigeria",
+          "observed": "Lagos, Nigeria",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "required_sections",
+          "label": "Required sections",
+          "expression": "4 = 4",
+          "expected": "4",
+          "observed": "4",
+          "result": "PASS",
+          "mandatory": true
+        }
+      ],
+      "semanticQuestions": [
+        {
+          "termId": "material_accuracy",
+          "label": "Material accuracy",
+          "question": "No material misstatement of the Lagos consumer market",
+          "reason": "No arithmetic or string comparison can settle this term."
+        }
+      ],
+      "outcome": "SATISFIED",
+      "breachedTermIds": [],
+      "executedAt": "2026-09-04T13:15:39.167Z"
+    },
+    "RC-000042": {
+      "orderId": "RC-000042",
+      "engine": "recourse/deterministic@0.4",
+      "checks": [
+        {
+          "termId": "minimum_sources",
+          "label": "Minimum sources",
+          "expression": "2 < 5",
+          "expected": "5",
+          "observed": "2",
+          "result": "BREACH",
+          "mandatory": true
+        },
+        {
+          "termId": "max_source_age_days",
+          "label": "Maximum source age",
+          "expression": "11 \u2264 30",
+          "expected": "30 days",
+          "observed": "11 days",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "geography",
+          "label": "Geographic scope",
+          "expression": "Lagos, Nigeria = Lagos, Nigeria",
+          "expected": "Lagos, Nigeria",
+          "observed": "Lagos, Nigeria",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "required_sections",
+          "label": "Required sections",
+          "expression": "4 = 4",
+          "expected": "4",
+          "observed": "4",
+          "result": "PASS",
+          "mandatory": true
+        }
+      ],
+      "semanticQuestions": [
+        {
+          "termId": "material_accuracy",
+          "label": "Material accuracy",
+          "question": "No material misstatement of the Lagos consumer market",
+          "reason": "No arithmetic or string comparison can settle this term."
+        }
+      ],
+      "outcome": "BREACH",
+      "breachedTermIds": [
+        "minimum_sources"
+      ],
+      "executedAt": "2026-09-04T13:15:39.190Z"
+    },
+    "RC-000044": {
+      "orderId": "RC-000044",
+      "engine": "recourse/deterministic@0.4",
+      "checks": [
+        {
+          "termId": "minimum_sources",
+          "label": "Minimum sources",
+          "expression": "3 < 5",
+          "expected": "5",
+          "observed": "3",
+          "result": "BREACH",
+          "mandatory": true
+        },
+        {
+          "termId": "max_source_age_days",
+          "label": "Maximum source age",
+          "expression": "16 \u2264 30",
+          "expected": "30 days",
+          "observed": "16 days",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "geography",
+          "label": "Geographic scope",
+          "expression": "Abuja, Nigeria = Abuja, Nigeria",
+          "expected": "Abuja, Nigeria",
+          "observed": "Abuja, Nigeria",
+          "result": "PASS",
+          "mandatory": true
+        },
+        {
+          "termId": "required_sections",
+          "label": "Required sections",
+          "expression": "4 = 4",
+          "expected": "4",
+          "observed": "4",
+          "result": "PASS",
+          "mandatory": true
+        }
+      ],
+      "semanticQuestions": [
+        {
+          "termId": "material_accuracy",
+          "label": "Material accuracy",
+          "question": "No material misstatement of the Lagos consumer market",
+          "reason": "No arithmetic or string comparison can settle this term."
+        }
+      ],
+      "outcome": "BREACH",
+      "breachedTermIds": [
+        "minimum_sources"
+      ],
+      "executedAt": "2026-09-04T13:15:47.418Z"
+    }
+  },
+  "disputes": {
+    "dsp_rc-000042": {
+      "id": "dsp_rc-000042",
+      "orderId": "RC-000042",
+      "ref": "RC/000042",
+      "title": "Lagos Consumer Commerce Brief",
+      "claim": "The agreement required at least five independent sources because this brief sizes a market entry. Two were supplied. The corroboration I paid for is not present.",
+      "claimedRemedy": "FULL_REFUND",
+      "status": "SETTLED",
+      "openedBy": "BUYER",
+      "openedAt": "2026-09-04T13:15:39.194Z",
+      "contestedTermIds": [
+        "minimum_sources"
+      ]
+    },
+    "dsp_rc-000044": {
+      "id": "dsp_rc-000044",
+      "orderId": "RC-000044",
+      "ref": "RC/000044",
+      "title": "Abuja Telecom Coverage Audit",
+      "claim": "Five corridors were contracted and three were audited. The audit is not usable for the rollout decision it was bought for.",
+      "claimedRemedy": "FULL_REFUND",
+      "status": "OPEN",
+      "openedBy": "BUYER",
+      "openedAt": "2026-09-04T13:15:47.423Z",
+      "contestedTermIds": [
+        "minimum_sources"
+      ]
+    }
+  },
+  "adjudications": {
+    "dsp_rc-000042": {
+      "id": "adj_8bc39d2fc711",
+      "disputeId": "dsp_rc-000042",
+      "orderId": "RC-000042",
+      "forum": "GENLAYER",
+      "network": "GENLAYER STUDIONET",
+      "contractAddress": "0xB33ebE4c93304098B7ae1c50686dC6C4A17B8e0c",
+      "transactionHash": "0x985405465c5a627fcaba32c824b00670fb727b0f64d16da6432535a451513c6a",
+      "networkStatus": "ACCEPTED",
+      "votes": {
+        "0x0C058E7337811464BCA0e8495Dd02b454edd0a0F": "agree",
+        "0x39dc435f4B056F1a0c456d8Afd42A9B5B393cfFb": "agree",
+        "0x6F4DbE8c161817815c5F322F3038479e263484a2": "idle",
+        "0xC41a2f81fCdcDfF9AAfd393788359A19F4D1DDE7": "agree",
+        "0xb114B1BDff903F2a9cB0EE080E22C0d9A3f4cD3D": "idle"
+      },
+      "status": "FINALIZED",
+      "question": "Given the deterministic findings, is the shortfall a material breach of the mandatory terms in contention?",
+      "inputsHash": "0x2ad6c868858930cb9b024fdba4cba243a5091e78e891634c3f944ea29853c2c7",
+      "ruling": {
+        "decision": "BUYER_WINS",
+        "materialBreach": true,
+        "violatedTerms": [
+          "minimum_sources"
+        ],
+        "satisfiedTerms": [],
+        "recommendedSettlement": "REFUND",
+        "reasoningSummary": "The mandatory minimum_sources term required 5 sources, but only 2 were delivered. The merchant's admission that corroboration could not be secured confirms the shortfall, defeating the core purpose of the market entry brief contracted by the buyer."
+      },
+      "failureReason": null,
+      "submittedAt": "2026-09-04T13:15:39.986Z",
+      "finalizedAt": "2026-09-04T13:15:47.364Z"
+    }
+  },
+  "settlements": {
+    "RC-000038": {
+      "id": "stl_ef6bf4fa12d6",
+      "orderId": "RC-000038",
+      "outcome": "RELEASED",
+      "amount": {
+        "amount": "2.25",
+        "currency": "USDC"
+      },
+      "from": "procure.agent",
+      "to": "datasmith.agent",
+      "reason": "All mandatory terms were satisfied.",
+      "idempotencyKey": "RC-000038:RELEASED",
+      "rail": "simulated",
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "transactionHash": null,
+      "executedAt": "2026-09-04T13:15:39.122Z"
+    },
+    "RC-000041": {
+      "id": "stl_936611d7093a",
+      "orderId": "RC-000041",
+      "outcome": "RELEASED",
+      "amount": {
+        "amount": "1.00",
+        "currency": "USDC"
+      },
+      "from": "shopper.agent",
+      "to": "merchant.agent",
+      "reason": "All mandatory terms were satisfied.",
+      "idempotencyKey": "RC-000041:RELEASED",
+      "rail": "simulated",
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "transactionHash": null,
+      "executedAt": "2026-09-04T13:15:39.170Z"
+    },
+    "RC-000042": {
+      "id": "stl_0d24bdfe4353",
+      "orderId": "RC-000042",
+      "outcome": "REFUNDED",
+      "amount": {
+        "amount": "1.00",
+        "currency": "USDC"
+      },
+      "from": "merchant.agent",
+      "to": "shopper.agent",
+      "reason": "Adjudication found a material breach of a mandatory term.",
+      "idempotencyKey": "RC-000042:REFUNDED",
+      "rail": "simulated",
+      "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW",
+      "transactionHash": null,
+      "executedAt": "2026-09-04T13:15:47.371Z"
+    }
+  },
+  "events": {
+    "RC-000038": [
+      {
+        "id": "evt_6e62ac7708cb",
+        "orderId": "RC-000038",
+        "type": "ORDER_CREATED",
+        "state": "OFFERED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.101Z",
+        "summary": "Protected purchase RC/000038 offered",
+        "detail": {
+          "resource": "Abuja Retail Footfall Sample",
+          "amount": "2.25 USDC"
+        }
+      },
+      {
+        "id": "evt_c34dc7770034",
+        "orderId": "RC-000038",
+        "type": "AGREEMENT_LOCKED",
+        "state": "ACCEPTED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.106Z",
+        "summary": "Agreement locked before settlement",
+        "detail": {
+          "agreementHash": "0x9cfdd897b28ec9145a443a1d3b2e1795632c71746146b9e345c98e2a834fe16b",
+          "terms": 5
+        }
+      },
+      {
+        "id": "evt_bb1c48b07705",
+        "orderId": "RC-000038",
+        "type": "PAYMENT_ESCROWED",
+        "state": "ESCROWED",
+        "phase": "PAYMENT",
+        "at": "2026-09-04T13:15:39.108Z",
+        "summary": "Payment captured and held under protection",
+        "detail": {
+          "rail": "simulated",
+          "amount": "2.25 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      },
+      {
+        "id": "evt_3d4deecaa5bb",
+        "orderId": "RC-000038",
+        "type": "DELIVERY_POSTED",
+        "state": "DELIVERED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.113Z",
+        "summary": "Merchant submitted delivery and evidence",
+        "detail": {
+          "evidenceItems": 3,
+          "evidenceHash": "0x4ece62df693fdc350a308f52ff0a2f54f3b3187d9caf40650237d7001e8dbad0"
+        }
+      },
+      {
+        "id": "evt_51965a783a5e",
+        "orderId": "RC-000038",
+        "type": "VERIFICATION_STARTED",
+        "state": "VERIFICATION_PENDING",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.114Z",
+        "summary": "Deterministic verification started",
+        "detail": {
+          "engine": "recourse/deterministic@0.4"
+        }
+      },
+      {
+        "id": "evt_6d53114a58fd",
+        "orderId": "RC-000038",
+        "type": "VERIFICATION_PASSED",
+        "state": "FULFILLED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.117Z",
+        "summary": "All mandatory terms satisfied",
+        "detail": {
+          "checks": 4
+        }
+      },
+      {
+        "id": "evt_665d5070e8eb",
+        "orderId": "RC-000038",
+        "type": "MERCHANT_PAID",
+        "state": "RELEASED",
+        "phase": "SETTLEMENT",
+        "at": "2026-09-04T13:15:39.124Z",
+        "summary": "Escrow released to datasmith.agent",
+        "detail": {
+          "amount": "2.25 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      }
+    ],
+    "RC-000039": [
+      {
+        "id": "evt_c8634f569788",
+        "orderId": "RC-000039",
+        "type": "ORDER_CREATED",
+        "state": "OFFERED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.127Z",
+        "summary": "Protected purchase RC/000039 offered",
+        "detail": {
+          "resource": "Nairobi Logistics Rate Card",
+          "amount": "2.50 USDC"
+        }
+      },
+      {
+        "id": "evt_04de1aa66b14",
+        "orderId": "RC-000039",
+        "type": "AGREEMENT_LOCKED",
+        "state": "ACCEPTED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.130Z",
+        "summary": "Agreement locked before settlement",
+        "detail": {
+          "agreementHash": "0x9918f4cebe66715588485c4166292d63c6ca9d40a5746c91270022bb982a920b",
+          "terms": 5
+        }
+      },
+      {
+        "id": "evt_884f0abcd4e2",
+        "orderId": "RC-000039",
+        "type": "PAYMENT_ESCROWED",
+        "state": "ESCROWED",
+        "phase": "PAYMENT",
+        "at": "2026-09-04T13:15:39.132Z",
+        "summary": "Payment captured and held under protection",
+        "detail": {
+          "rail": "simulated",
+          "amount": "2.50 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      }
+    ],
+    "RC-000040": [
+      {
+        "id": "evt_52fed6e8d744",
+        "orderId": "RC-000040",
+        "type": "ORDER_CREATED",
+        "state": "OFFERED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.135Z",
+        "summary": "Protected purchase RC/000040 offered",
+        "detail": {
+          "resource": "Kano Agricultural Input Prices",
+          "amount": "1.75 USDC"
+        }
+      },
+      {
+        "id": "evt_8eddeaea3391",
+        "orderId": "RC-000040",
+        "type": "AGREEMENT_LOCKED",
+        "state": "ACCEPTED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.138Z",
+        "summary": "Agreement locked before settlement",
+        "detail": {
+          "agreementHash": "0x2c623d2860b5b58de2195037c3bd5824d9fdfd1ec60b4768e5941fd61a5d80d0",
+          "terms": 5
+        }
+      },
+      {
+        "id": "evt_e31b231025e7",
+        "orderId": "RC-000040",
+        "type": "PAYMENT_ESCROWED",
+        "state": "ESCROWED",
+        "phase": "PAYMENT",
+        "at": "2026-09-04T13:15:39.141Z",
+        "summary": "Payment captured and held under protection",
+        "detail": {
+          "rail": "simulated",
+          "amount": "1.75 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      },
+      {
+        "id": "evt_2424fb149cea",
+        "orderId": "RC-000040",
+        "type": "DELIVERY_POSTED",
+        "state": "DELIVERED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.144Z",
+        "summary": "Merchant submitted delivery and evidence",
+        "detail": {
+          "evidenceItems": 5,
+          "evidenceHash": "0x4bc1de55f6b55347ca45c5687b58c4c6f0d8fdb75bbd1118bf83c67fd5e58b17"
+        }
+      },
+      {
+        "id": "evt_86c05eee0935",
+        "orderId": "RC-000040",
+        "type": "VERIFICATION_STARTED",
+        "state": "VERIFICATION_PENDING",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.146Z",
+        "summary": "Deterministic verification started",
+        "detail": {
+          "engine": "recourse/deterministic@0.4"
+        }
+      },
+      {
+        "id": "evt_4157761f2098",
+        "orderId": "RC-000040",
+        "type": "VERIFICATION_PASSED",
+        "state": "FULFILLED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.148Z",
+        "summary": "All mandatory terms satisfied",
+        "detail": {
+          "checks": 4
+        }
+      }
+    ],
+    "RC-000041": [
+      {
+        "id": "evt_dd2c0e145114",
+        "orderId": "RC-000041",
+        "type": "ORDER_CREATED",
+        "state": "OFFERED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.151Z",
+        "summary": "Protected purchase RC/000041 offered",
+        "detail": {
+          "resource": "Lagos Consumer Commerce Brief",
+          "amount": "1.00 USDC"
+        }
+      },
+      {
+        "id": "evt_874900b6c21e",
+        "orderId": "RC-000041",
+        "type": "AGREEMENT_LOCKED",
+        "state": "ACCEPTED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.157Z",
+        "summary": "Agreement locked before settlement",
+        "detail": {
+          "agreementHash": "0xbd18761b7f28eff1bc6b48effda8c3418cacf0a9f83dd4cba7c72d6cdee78794",
+          "terms": 5
+        }
+      },
+      {
+        "id": "evt_312687955295",
+        "orderId": "RC-000041",
+        "type": "PAYMENT_ESCROWED",
+        "state": "ESCROWED",
+        "phase": "PAYMENT",
+        "at": "2026-09-04T13:15:39.160Z",
+        "summary": "Payment captured and held under protection",
+        "detail": {
+          "rail": "simulated",
+          "amount": "1.00 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      },
+      {
+        "id": "evt_83ecc2af92d9",
+        "orderId": "RC-000041",
+        "type": "DELIVERY_POSTED",
+        "state": "DELIVERED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.164Z",
+        "summary": "Merchant submitted delivery and evidence",
+        "detail": {
+          "evidenceItems": 6,
+          "evidenceHash": "0x3e85f8c20ca9489d9d3c80d9d508b7ab2de64ba07055cf4d20434b21704e3c64"
+        }
+      },
+      {
+        "id": "evt_abd8dbc88ee9",
+        "orderId": "RC-000041",
+        "type": "VERIFICATION_STARTED",
+        "state": "VERIFICATION_PENDING",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.166Z",
+        "summary": "Deterministic verification started",
+        "detail": {
+          "engine": "recourse/deterministic@0.4"
+        }
+      },
+      {
+        "id": "evt_23d904f29c6a",
+        "orderId": "RC-000041",
+        "type": "VERIFICATION_PASSED",
+        "state": "FULFILLED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.169Z",
+        "summary": "All mandatory terms satisfied",
+        "detail": {
+          "checks": 4
+        }
+      },
+      {
+        "id": "evt_1b7698b8ce74",
+        "orderId": "RC-000041",
+        "type": "MERCHANT_PAID",
+        "state": "RELEASED",
+        "phase": "SETTLEMENT",
+        "at": "2026-09-04T13:15:39.173Z",
+        "summary": "Escrow released to merchant.agent",
+        "detail": {
+          "amount": "1.00 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      }
+    ],
+    "RC-000042": [
+      {
+        "id": "evt_f50ef4a6b343",
+        "orderId": "RC-000042",
+        "type": "ORDER_CREATED",
+        "state": "OFFERED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.177Z",
+        "summary": "Protected purchase RC/000042 offered",
+        "detail": {
+          "resource": "Lagos Consumer Commerce Brief",
+          "amount": "1.00 USDC"
+        }
+      },
+      {
+        "id": "evt_ae2696b40852",
+        "orderId": "RC-000042",
+        "type": "AGREEMENT_LOCKED",
+        "state": "ACCEPTED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:39.181Z",
+        "summary": "Agreement locked before settlement",
+        "detail": {
+          "agreementHash": "0x9c2e814c483563a9d6a7d5f2a864bbadebee9ae6fdda86d1f3f9e73d58860626",
+          "terms": 5
+        }
+      },
+      {
+        "id": "evt_c1b03477f5b9",
+        "orderId": "RC-000042",
+        "type": "PAYMENT_ESCROWED",
+        "state": "ESCROWED",
+        "phase": "PAYMENT",
+        "at": "2026-09-04T13:15:39.185Z",
+        "summary": "Payment captured and held under protection",
+        "detail": {
+          "rail": "simulated",
+          "amount": "1.00 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      },
+      {
+        "id": "evt_425cfdbc0087",
+        "orderId": "RC-000042",
+        "type": "DELIVERY_POSTED",
+        "state": "DELIVERED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.188Z",
+        "summary": "Merchant submitted delivery and evidence",
+        "detail": {
+          "evidenceItems": 2,
+          "evidenceHash": "0xa9c42e8053336481e6d0216d249dbea4975bed978ee2ab56f1c552711401ca62"
+        }
+      },
+      {
+        "id": "evt_a5fc25bb9805",
+        "orderId": "RC-000042",
+        "type": "VERIFICATION_STARTED",
+        "state": "VERIFICATION_PENDING",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.190Z",
+        "summary": "Deterministic verification started",
+        "detail": {
+          "engine": "recourse/deterministic@0.4"
+        }
+      },
+      {
+        "id": "evt_911bc5210055",
+        "orderId": "RC-000042",
+        "type": "BREACH_DETECTED",
+        "state": "VERIFICATION_PENDING",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:39.192Z",
+        "summary": "Mandatory term breached: minimum_sources",
+        "detail": {
+          "breachedTerms": "minimum_sources",
+          "finding": "2 < 5"
+        }
+      },
+      {
+        "id": "evt_8a2327ace1eb",
+        "orderId": "RC-000042",
+        "type": "DISPUTE_OPENED",
+        "state": "DISPUTED",
+        "phase": "JUDGMENT",
+        "at": "2026-09-04T13:15:39.196Z",
+        "summary": "Recourse claim opened for RC/000042",
+        "detail": {
+          "disputeId": "dsp_rc-000042",
+          "contested": "minimum_sources"
+        }
+      },
+      {
+        "id": "evt_10296f617d5c",
+        "orderId": "RC-000042",
+        "type": "ADJUDICATION_SUBMITTED",
+        "state": "ADJUDICATING",
+        "phase": "JUDGMENT",
+        "at": "2026-09-04T13:15:39.988Z",
+        "summary": "Dispute submitted to GenLayer",
+        "detail": {
+          "transaction": "0x985405465c5a627fcaba32c824b00670fb727b0f64d16da6432535a451513c6a",
+          "contract": "0xB33ebE4c93304098B7ae1c50686dC6C4A17B8e0c"
+        }
+      },
+      {
+        "id": "evt_842dea5dab48",
+        "orderId": "RC-000042",
+        "type": "RULING_FINALIZED",
+        "state": "BUYER_WON",
+        "phase": "JUDGMENT",
+        "at": "2026-09-04T13:15:47.369Z",
+        "summary": "Ruling: BUYER_WINS",
+        "detail": {
+          "decision": "BUYER_WINS",
+          "violatedTerms": "minimum_sources",
+          "transaction": "0x985405465c5a627fcaba32c824b00670fb727b0f64d16da6432535a451513c6a"
+        }
+      },
+      {
+        "id": "evt_2b8ef691baf1",
+        "orderId": "RC-000042",
+        "type": "REFUND_EXECUTED",
+        "state": "REFUNDED",
+        "phase": "SETTLEMENT",
+        "at": "2026-09-04T13:15:47.376Z",
+        "summary": "Refund executed to shopper.agent",
+        "detail": {
+          "amount": "1.00 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      }
+    ],
+    "RC-000043": [
+      {
+        "id": "evt_96f008800f0a",
+        "orderId": "RC-000043",
+        "type": "ORDER_CREATED",
+        "state": "OFFERED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:47.381Z",
+        "summary": "Protected purchase RC/000043 offered",
+        "detail": {
+          "resource": "Port Harcourt Fuel Retail Snapshot",
+          "amount": "3.00 USDC"
+        }
+      },
+      {
+        "id": "evt_bcd259e23d2c",
+        "orderId": "RC-000043",
+        "type": "AGREEMENT_LOCKED",
+        "state": "ACCEPTED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:47.388Z",
+        "summary": "Agreement locked before settlement",
+        "detail": {
+          "agreementHash": "0x4a6eaa9e5196c0b0cd5740e778f351aa8fc1c9d6ad80d7ca799eea291d32f19c",
+          "terms": 5
+        }
+      },
+      {
+        "id": "evt_41b0acbba357",
+        "orderId": "RC-000043",
+        "type": "PAYMENT_ESCROWED",
+        "state": "ESCROWED",
+        "phase": "PAYMENT",
+        "at": "2026-09-04T13:15:47.392Z",
+        "summary": "Payment captured and held under protection",
+        "detail": {
+          "rail": "simulated",
+          "amount": "3.00 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      }
+    ],
+    "RC-000044": [
+      {
+        "id": "evt_fac697b9255c",
+        "orderId": "RC-000044",
+        "type": "ORDER_CREATED",
+        "state": "OFFERED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:47.397Z",
+        "summary": "Protected purchase RC/000044 offered",
+        "detail": {
+          "resource": "Abuja Telecom Coverage Audit",
+          "amount": "2.00 USDC"
+        }
+      },
+      {
+        "id": "evt_141acfea426f",
+        "orderId": "RC-000044",
+        "type": "AGREEMENT_LOCKED",
+        "state": "ACCEPTED",
+        "phase": "PROMISE",
+        "at": "2026-09-04T13:15:47.403Z",
+        "summary": "Agreement locked before settlement",
+        "detail": {
+          "agreementHash": "0xe913104c1383bb2bc33fe4fc3c276d1379148fabdadce0b1a97656eaecfaf82e",
+          "terms": 5
+        }
+      },
+      {
+        "id": "evt_49e6d7c995a0",
+        "orderId": "RC-000044",
+        "type": "PAYMENT_ESCROWED",
+        "state": "ESCROWED",
+        "phase": "PAYMENT",
+        "at": "2026-09-04T13:15:47.407Z",
+        "summary": "Payment captured and held under protection",
+        "detail": {
+          "rail": "simulated",
+          "amount": "2.00 USDC",
+          "execution": "SIGNATURE_VERIFIED_LOCAL_ESCROW"
+        }
+      },
+      {
+        "id": "evt_41a5768bb74b",
+        "orderId": "RC-000044",
+        "type": "DELIVERY_POSTED",
+        "state": "DELIVERED",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:47.413Z",
+        "summary": "Merchant submitted delivery and evidence",
+        "detail": {
+          "evidenceItems": 3,
+          "evidenceHash": "0x96e7471c0f0f18f36d240be8b4552702679bd2f8ff4b5b0084107de5b1bce4dc"
+        }
+      },
+      {
+        "id": "evt_ee0686bef7ea",
+        "orderId": "RC-000044",
+        "type": "VERIFICATION_STARTED",
+        "state": "VERIFICATION_PENDING",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:47.416Z",
+        "summary": "Deterministic verification started",
+        "detail": {
+          "engine": "recourse/deterministic@0.4"
+        }
+      },
+      {
+        "id": "evt_3dfafbd8e98b",
+        "orderId": "RC-000044",
+        "type": "BREACH_DETECTED",
+        "state": "VERIFICATION_PENDING",
+        "phase": "PROOF",
+        "at": "2026-09-04T13:15:47.420Z",
+        "summary": "Mandatory term breached: minimum_sources",
+        "detail": {
+          "breachedTerms": "minimum_sources",
+          "finding": "3 < 5"
+        }
+      },
+      {
+        "id": "evt_a18bad933c0d",
+        "orderId": "RC-000044",
+        "type": "DISPUTE_OPENED",
+        "state": "DISPUTED",
+        "phase": "JUDGMENT",
+        "at": "2026-09-04T13:15:47.427Z",
+        "summary": "Recourse claim opened for RC/000044",
+        "detail": {
+          "disputeId": "dsp_rc-000044",
+          "contested": "minimum_sources"
+        }
+      }
+    ]
+  }
+}

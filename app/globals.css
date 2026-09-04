@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+@theme {
+  /* ---- surfaces ---------------------------------------------------- */
+  --color-canvas: #0a0b0c;
+  --color-surface: #0e1011;
+  --color-panel: #121415;
+  --color-raised: #171a1b;
+  --color-line: #1e2325;
+  --color-line-strong: #2d3438;
+
+  /* ---- text -------------------------------------------------------- */
+  --color-fg: #edefef;
+  --color-fg-muted: #99a2a6;
+  --color-fg-dim: #6a7378;
+  --color-fg-faint: #4b5357;
+
+  /* ---- semantics --------------------------------------------------- */
+  --color-pass: #4cb782;
+  --color-pass-dim: #1d2f27;
+  --color-pending: #d6a045;
+  --color-pending-dim: #302719;
+  --color-breach: #e0644a;
+  --color-breach-dim: #331d18;
+  --color-protected: #56a8c9;
+  --color-protected-dim: #142930;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "IBM Plex Mono", monospace;
+
+  --radius-panel: 2px;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-canvas);
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: #2c3a40;
+    color: #f4f6f6;
+  }
+
+  :focus-visible {
+    outline: 1px solid var(--color-fg);
+    outline-offset: 2px;
+    border-radius: 1px;
+  }
+
+  /* Technical data is always monospaced and tabular. */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-canvas);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #24292b;
+    border: 3px solid var(--color-canvas);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #333a3d;
+  }
+}
+
+@utility mono-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-fg-dim);
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fine engineering grid — texture, not decoration. */
+@utility grid-field {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+@utility hairline-x {
+  background-image: linear-gradient(
+    to right,
+    transparent,
+    var(--color-line) 12%,
+    var(--color-line) 88%,
+    transparent
+  );
+}
+
+/* ---- restrained motion --------------------------------------------- */
+@keyframes rc-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rc-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rc-draw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes rc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes rc-scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
+.rc-reveal {
+  animation: rc-reveal 320ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.rc-fade {
+  animation: rc-fade 400ms ease-out both;
+}
+
+.rc-draw {
+  transform-origin: top;
+  animation: rc-draw 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.rc-pulse {
+  animation: rc-pulse 2.4s ease-in-out infinite;
+}
+
+.rc-scan::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 25%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(86, 168, 201, 0.55),
+    transparent
+  );
+  animation: rc-scan 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

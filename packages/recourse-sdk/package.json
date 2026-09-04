@@ -1,0 +1,13 @@
+{
+  "name": "@recourse/sdk",
+  "version": "0.1.0",
+  "description": "Programmable chargebacks for autonomous commerce. Wrap any x402 payment in an enforceable agreement.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "license": "MIT",
+  "keywords": ["x402", "agentic-commerce", "escrow", "genlayer", "chargeback", "dispute"]
+}

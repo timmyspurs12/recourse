@@ -1,0 +1,7 @@
+{
+  "note": "Default RecourseAdjudicator deployment. Override with GENLAYER_CONTRACT_ADDRESS, or redeploy with `npm run genlayer:deploy`.",
+  "network": "studionet",
+  "address": "0xB33ebE4c93304098B7ae1c50686dC6C4A17B8e0c",
+  "deployedAt": "2026-09-04T11:54:11.158Z",
+  "deployTx": "0x9e9cfc082ccdfdab69fd1216a66227dbaf8878d6973faacd8d887348d52d0902"
+}

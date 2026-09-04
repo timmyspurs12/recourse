@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: recourse
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/network
+    disk:
+      # The protocol ledger. Without a persistent disk, protected transactions
+      # are lost on every deploy.
+      name: recourse-ledger
+      mountPath: /app/.recourse
+      sizeGB: 1
+    envVars:
+      - key: GENLAYER_NETWORK
+        value: studionet
+      - key: RECOURSE_REQUIRE_AUTH
+        value: "1"
+      - key: RECOURSE_STORE_FILE
+        value: /app/.recourse/ledger.json
