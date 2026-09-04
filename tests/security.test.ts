@@ -432,3 +432,53 @@ test("expensive endpoints refuse to be hammered", async () => {
   assert.ok(blocked.retryAfterSeconds > 0);
   resetRateLimits();
 });
+
+test("transient network failures are retried, not treated as a ruling failure", async () => {
+  /*
+   * A public testnet shedding load ("node is at capacity, retry in ~981ms")
+   * must not strand a dispute. Escrow is held while this is unresolved, so a
+   * one-second hiccup turning into a permanent FAILED is a real harm.
+   */
+  const { GenLayerForum } = await import("../integrations/genlayer/forum");
+
+  let calls = 0;
+  const forum = new GenLayerForum({
+    networkKey: "testnet-bradbury",
+    chain: {} as never,
+    networkLabel: "TEST",
+    contractAddress: "0xtest",
+    privateKey: null,
+    deploymentFile: "",
+  });
+
+  // Fail twice with the exact error the live network produced, then succeed.
+  (forum as unknown as { getClient: () => unknown }).getClient = () => ({
+    writeContract: async () => {
+      calls += 1;
+      if (calls < 3) {
+        throw new Error(
+          "Request exceeds defined limit.\n\nDetails: transaction gas rate limit exceeded: node is at capacity, retry in ~981ms",
+        );
+      }
+      return "0xabc";
+    },
+  });
+
+  const outcome = await forum.submit({
+    disputeId: "dsp_retry",
+    orderId: "RC-000001",
+    question: "q",
+    payload: {
+      agreementHash: "0x1",
+      evidenceHash: "0x2",
+      contestedTerms: [{ id: "t", label: "T", operator: "GTE", expected: "5", mandatory: true }],
+      deterministicFindings: [],
+      merchantStatement: "m",
+      buyerClaim: "b",
+    },
+  });
+
+  assert.equal(calls, 3, "should have retried twice before succeeding");
+  assert.equal(outcome.status, "SUBMITTED");
+  assert.equal(outcome.transactionHash, "0xabc");
+});

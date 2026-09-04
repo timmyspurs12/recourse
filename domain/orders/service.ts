@@ -497,7 +497,14 @@ export class RecourseProtocol {
       const question =
         "Given the deterministic findings, is the shortfall a material breach of the mandatory terms in contention?";
 
-      const current = await this.moveTo(order, "ADJUDICATING");
+      /*
+       * A previous attempt may have failed transiently, leaving the order in
+       * ADJUDICATING already. Re-entering the same state is not a legal edge,
+       * so only transition when there is somewhere to go — otherwise a retry
+       * would throw and the dispute would be stranded permanently.
+       */
+      const current =
+        order.state === "ADJUDICATING" ? order : await this.moveTo(order, "ADJUDICATING");
       await this.store.putDispute({ ...dispute, status: "ADJUDICATING" });
 
       const outcome = await this.forum.submit({

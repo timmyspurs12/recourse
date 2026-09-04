@@ -171,6 +171,44 @@ export function parseRuling(raw: unknown): Ruling | null {
   };
 }
 
+/**
+ * Public testnets rate-limit and shed load. Those failures are transient and
+ * self-describing ("retry in ~981ms"), so treating them as a permanent
+ * adjudication failure strands a dispute that would have succeeded a second
+ * later — with the escrow held and no way forward.
+ */
+function retryDelayMs(error: unknown): number | null {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/retry in ~?(\d+)\s*ms/i.test(message)) {
+    const match = message.match(/retry in ~?(\d+)\s*ms/i);
+    return Math.max(500, Number(match?.[1] ?? 1000));
+  }
+  if (/rate limit|at capacity|too many requests|429|ETIMEDOUT|ECONNRESET|socket hang up|fetch failed/i.test(message)) {
+    return 1500;
+  }
+  return null;
+}
+
+async function withRetries<T>(
+  operation: () => Promise<T>,
+  attempts = 5,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const delay = retryDelayMs(error);
+      if (delay === null) throw error;
+      // Back off progressively; the node tells us roughly how long to wait.
+      await new Promise((resolve) => setTimeout(resolve, delay * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 export class GenLayerForum implements AdjudicationForum {
   readonly id = "GENLAYER";
   private readonly config: GenLayerConfig;
@@ -236,12 +274,14 @@ export class GenLayerForum implements AdjudicationForum {
 
     try {
       const client = this.getClient();
-      const transactionHash = await client.writeContract({
-        address: this.config.contractAddress as `0x${string}`,
-        functionName: "adjudicate",
-        args: [request.disputeId, JSON.stringify(payload)],
-        value: 0n,
-      });
+      const transactionHash = await withRetries(() =>
+        client.writeContract({
+          address: this.config.contractAddress as `0x${string}`,
+          functionName: "adjudicate",
+          args: [request.disputeId, JSON.stringify(payload)],
+          value: 0n,
+        }),
+      );
 
       return {
         status: "SUBMITTED",
