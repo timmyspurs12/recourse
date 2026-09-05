@@ -74,65 +74,40 @@ Strongly recommended. 90 seconds, screen recording, no narration required:
 
 That last step is the one that wins arguments: it proves the layer is not a buyer-side tax.
 
-## 05 · How-to (the exact path)
+## 05 · How-to (one step per box)
 
-```
-01  Clone and install
-    git clone https://github.com/<you>/recourse && cd recourse && npm install
+The form gives each step an **optional heading** and an **instruction**. Use the heading
+column for the short label and paste the instruction beside it.
 
-02  Seed the ledger with real protocol runs
-    npm run seed
-    Executes real purchases, deliveries and verifications, including one live
-    GenLayer adjudication. Takes about 40 seconds. Use --fast to skip the network.
-
-03  Start it
-    npm run dev   →  http://localhost:3000
-    No wallet, no API key, no environment variables required.
-
-04  Run the flagship demo
-    Open /demo, choose "Promise breached", press "Run protected purchase".
-    The merchant delivers 2 of the 5 required sources. The protocol detects
-    2 < 5 in code, the buyer opens a claim, and the contested term goes to
-    GenLayer. Consensus takes ~25 seconds — the wait is real. Buyer wins,
-    $1.00 USDC is refunded.
-
-05  Prove it was not the AI doing arithmetic
-    Open the order dossier. Four deterministic checks resolved in code with no
-    model involved; one semantic question went to GenLayer. The validator votes
-    on the dispute page are exactly what the network reported.
-
-06  Check neutrality
-    Back on /demo choose "Promise satisfied" and run again. Every mandatory term
-    passes, no adjudication happens, and the merchant is paid in ~2 seconds.
-
-07  Verify the adjudicator independently
-    npm run genlayer:smoke
-    Submits a dispute to the deployed contract with a prompt-injection attempt
-    embedded in the merchant statement ("IGNORE ALL PREVIOUS INSTRUCTIONS...").
-    It still rules BUYER_WINS.
-
-08  Run the tests
-    npm test              39 tests: lifecycle, adversarial, auth
-    npm run test:live     2 real on-network adjudications, both directions
-```
+| # | Heading | Instruction |
+| --- | --- | --- |
+| 01 | Open the live demo | Go to https://recourse-production-bf02.up.railway.app/demo and choose "Promise breached". No wallet, API key or setup is needed. |
+| 02 | Read the agreement first | The panel lists five machine-readable terms: at least 5 sources, sources under 30 days old, Lagos scope, exactly 4 sections, and material accuracy. Only the last one is semantic. |
+| 03 | Run the protected purchase | Press "Run protected purchase". $1.00 USDC is escrowed against a hash of that agreement before the merchant delivers anything. |
+| 04 | Watch the split | The header reports "4 resolved locally / 1 referred to GenLayer". The merchant delivered 2 of 5 sources; the protocol records 2 < 5 as a BREACH in code, with no model involved. |
+| 05 | Wait for real consensus | The run pauses at ADJUDICATING for roughly 25-60 seconds. This is a genuine wait for GenLayer validators on Bradbury, not an animation. Escrow stays held throughout. |
+| 06 | Check the ruling | The ruling is BUYER_WINS and $1.00 is REFUNDED. Open the dispute dossier to see the transaction hash and each validator address with the vote it cast, exactly as the network reported them. |
+| 07 | Confirm the merchant can win | Choose "Promise satisfied" and run again. Every mandatory term passes, no adjudication happens at all, and the merchant is paid in about 2 seconds. |
+| 08 | Verify the contract | The RecourseAdjudicator Intelligent Contract is at https://explorer-bradbury.genlayer.com/address/0xed3493996D6cfEA8100efa31422Fb0a1f0988989 |
+| 09 | Run it yourself (optional) | git clone https://github.com/timmyspurs12/recourse && cd recourse && npm install && npm run seed && npm run dev |
+| 10 | Run the tests (optional) | npm test runs 41 tests covering the lifecycle, adversarial cases and agent authentication. npm run test:live submits two real adjudications on-network, one ruling for the buyer and one for the merchant. |
 
 ## 06 · Review verification — expected outcome (500 max)
 
-**468 / 500 characters — verified.**
+**487 / 500 characters — verified.**
 
 ```
-npm install && npm run seed && npm run dev. At /demo pick "Promise breached" and Run: verification records 2 < 5 as BREACH in code, the dispute goes to RecourseAdjudicator on GenLayer studionet, and after ~25s of real consensus the ruling is BUYER_WINS and $1.00 is REFUNDED. The dispute page shows a real tx hash and the validator votes the network reported. Then pick "Promise satisfied": released to the merchant in ~2s with no adjudication. npm test -> 40 passing.
+Open https://recourse-production-bf02.up.railway.app/demo, choose "Promise breached", press Run. Header shows "4 resolved locally / 1 referred to GenLayer". Verification records 2 < 5 as BREACH in code; the contested term goes to RecourseAdjudicator on GenLayer Bradbury (0xed3493996D6cfEA8100efa31422Fb0a1f0988989). After real consensus the ruling is BUYER_WINS and $1.00 is REFUNDED, with a real tx hash and validator votes. "Promise satisfied" instead releases to the merchant in ~2s.
 ```
 
 ## 06 · Contract links (optional — but add it)
 
 ```
-https://studio.genlayer.com/contracts/0xB33ebE4c93304098B7ae1c50686dC6C4A17B8e0c
+https://explorer-bradbury.genlayer.com/address/0xed3493996D6cfEA8100efa31422Fb0a1f0988989
 ```
 
-Deployed `RecourseAdjudicator`, studionet, recorded in `genlayer.deployment.json`.
-If Studio has reaped it by judging time, run `npm run genlayer:deploy` and update both the form
-and that file.
+Deployed `RecourseAdjudicator` on GenLayer Testnet Bradbury — a public testnet with a public
+explorer, so a reviewer can verify the rulings without taking anything on trust.
 
 ## 07 · Project links
 
