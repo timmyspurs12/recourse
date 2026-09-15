@@ -27,12 +27,20 @@ export type NetworkMode = "LIVE" | "DEMO" | "SIMULATED";
 
 export interface NetworkStatus {
   mode: NetworkMode;
-  /** e.g. "GENLAYER TESTNET" */
+  /** e.g. "GENLAYER STUDIO NEXT" */
   label: string;
   chain: string;
   adapter: string;
   /** Null until a real node connection exists. */
   blockHeight: Attested<number>;
+  /** Chain id of the network the protocol is actually pointed at. */
+  chainId?: number | null;
+  /** Endpoint, so a reader can check which deployment this is. */
+  rpcUrl?: string | null;
+  /** Whether the network prices deploy/write at all (Consensus v0.6). */
+  networkCanChargeFees?: boolean;
+  /** Measured fee profile in use, or null when the network's defaults are used. */
+  feeProfile?: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -288,6 +296,33 @@ export interface Adjudication {
    * synthesised: absent unless a node reported them.
    */
   votes: Attested<Array<{ validator: string; vote: string }>>;
+  /**
+   * Consensus v0.6 fee deposit. This is what was escrowed up front against the
+   * network's prices — a deposit, not a price, and not the amount consumed.
+   */
+  fees?: Attested<{
+    /** Formatted for reading; `depositWei` is the exact submitted value. */
+    deposit: string;
+    depositWei: string;
+    /** "developer" when a measured fee profile was used. */
+    source: "developer" | "network-default";
+    /** Verified against the live fee policy; "mismatch" is never submitted. */
+    policy: "verified" | "mismatch" | "unavailable";
+    gasless: boolean;
+    /** Fee-config hash the quote was signed against, when reported. */
+    quoteHash: string | null;
+    /** Measured profile used, or why none was. */
+    profile: string | null;
+    profileNote: string | null;
+    queuePosition: number | null;
+  }>;
+  /** What the network reported happening to the deposit. */
+  feeAccounting?: Attested<{
+    deposit: string | null;
+    consumed: string | null;
+    refunded: string | null;
+    source: string;
+  }>;
 }
 
 export type RulingOutcome = "BUYER_WINS" | "MERCHANT_WINS" | "SPLIT";

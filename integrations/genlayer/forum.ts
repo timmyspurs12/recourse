@@ -1,4 +1,5 @@
-import { createAccount, createClient } from "genlayer-js";
+import { createAccount, createClient, isSuccessful } from "genlayer-js";
+import { generatePrivateKey } from "viem/accounts";
 import type { Hash } from "genlayer-js/types";
 import type {
   AdjudicationForum,
@@ -8,14 +9,32 @@ import type {
 import type { Ruling } from "../../domain/model";
 import { documentHash, type Json } from "../../domain/shared/canonical";
 import { loadGenLayerConfig, type GenLayerConfig } from "./config";
+import { createForumKit, extractFeeAccounting, quoteToDomain, type ForumKit } from "./fees";
 
 /**
- * GenLayer adjudication forum.
+ * GenLayer adjudication forum, on Consensus v0.6.
  *
  * This is a real client against a real network. Every field it reports —
- * transaction hash, finality status, validator votes — comes back from the
- * chain. When something is unknown it is reported as null and the UI says
- * "not yet available"; nothing here is ever synthesised to look complete.
+ * transaction hash, finality status, validator votes, fee deposit — comes back
+ * from the chain or from a quote the chain priced. When something is unknown it
+ * is reported as null and the UI says "not yet available"; nothing here is ever
+ * synthesised to look complete.
+ *
+ * v0.6 changed three things this file had to follow, and one it had to refuse:
+ *
+ *  - **Fees.** Every write carries a `FeesDistribution` and its quoted value.
+ *    The quote comes from the transaction kit over a measured profile plus live
+ *    prices (see `fees.ts`), and a quote that does not match the network's live
+ *    fee config is not signed unless an operator explicitly allows it.
+ *  - **Success is two facts, not one.** `ACCEPTED`/`FINALIZED` says the network
+ *    decided something; only `FINISHED_WITH_RETURN` says the contract ran.
+ *    `isSuccessful` requires both, and that is what we use.
+ *  - **Statuses and phases.** Receipts now carry a derived lifecycle
+ *    (`pending` → `processing` → `decided` → `finalized`) and a queue position
+ *    while a transaction waits. Both are surfaced verbatim.
+ *  - **Refused:** nothing. A forum that cannot quote a fee cannot submit, so it
+ *    reports FAILED with the reason and leaves escrow held rather than
+ *    broadcasting a transaction the network would reject.
  */
 
 type Client = ReturnType<typeof createClient>;
@@ -26,25 +45,35 @@ interface LeaderReceipt {
 }
 
 /**
- * Transaction receipts, across two different shapes.
+ * Transaction receipts, across three shapes.
  *
- * Studionet returns snake_case with `consensus_data.votes` and
+ * Studionet (stable) returns snake_case with `consensus_data.votes` and
  * `data.contract_address`. The public testnets return camelCase with the
  * validator set split across `lastRound.roundValidators` and
- * `lastRound.validatorVotes`, and the deployed address in `recipient`.
+ * `lastRound.validatorVotes`, and the deployed address in
+ * `txDataDecoded.contractAddress`. Consensus v0.6 adds a derived `lifecycle`
+ * and `queuePosition`.
  *
- * Reading only one shape means the other silently loses its validator data —
- * which is the most load-bearing evidence this product publishes. So both are
- * normalised into one structure before anything else looks at them.
+ * Reading only one shape means another silently loses its validator data or its
+ * deposit — the most load-bearing evidence this product publishes. So all of
+ * them are normalised into one structure before anything else looks at them.
  */
 interface Receipt {
-  status?: number;
+  status?: number | string;
   status_name?: string;
   statusName?: string;
   recipient?: string;
-  numOfRounds?: number | string;
+  txExecutionResult?: number;
   txExecutionResultName?: string;
+  txId?: string;
+  hash?: string;
+  numOfRounds?: number | string;
+  queuePosition?: number | string;
+  lifecycle?: { state?: string; phase?: string; outcome?: string };
   data?: { contract_address?: string };
+  txDataDecoded?: { contractAddress?: string };
+  feeAccounting?: Record<string, unknown>;
+  fee_accounting?: Record<string, unknown>;
   consensus_data?: {
     votes?: Record<string, string>;
     leader_receipt?: LeaderReceipt[];
@@ -53,16 +82,17 @@ interface Receipt {
     round?: number | string;
     roundValidators?: string[];
     validatorVotes?: number[];
+    validatorVotesName?: string[];
   };
 }
 
 /**
- * Vote codes as returned by the testnet consensus contract.
+ * Vote codes as returned by the consensus contract.
  *
  * 0 and 1 are confirmed against live transactions (all-1 rounds report
- * resultName AGREE). The remaining codes follow the documented enum ordering
- * but have not been observed here, so anything unrecognised is surfaced as its
- * raw code rather than given a label it might not deserve.
+ * resultName AGREE). v0.6 also returns named votes in `validatorVotesName`,
+ * which is preferred when present; anything unrecognised is surfaced as its raw
+ * code rather than given a label it might not deserve.
  */
 const VOTE_CODES: Record<number, string> = {
   0: "idle",
@@ -77,11 +107,17 @@ function normalizeVotes(receipt: Receipt): Record<string, string> | null {
 
   const validators = receipt.lastRound?.roundValidators;
   const votes = receipt.lastRound?.validatorVotes;
-  if (!validators?.length || !votes?.length) return null;
+  const named = receipt.lastRound?.validatorVotesName;
+  if (!validators?.length) return null;
+  if (!votes?.length && !named?.length) return null;
 
   const out: Record<string, string> = {};
   validators.forEach((validator, index) => {
-    const code = Number(votes[index]);
+    if (named?.[index]) {
+      out[validator] = String(named[index]).toLowerCase();
+      return;
+    }
+    const code = Number(votes?.[index]);
     out[validator] = VOTE_CODES[code] ?? `code:${code}`;
   });
   return out;
@@ -89,7 +125,12 @@ function normalizeVotes(receipt: Receipt): Record<string, string> | null {
 
 /** The address a deployment produced, whichever shape reported it. */
 export function contractAddressFrom(receipt: Receipt): string | null {
-  return receipt.data?.contract_address ?? receipt.recipient ?? null;
+  return (
+    receipt.txDataDecoded?.contractAddress ??
+    receipt.data?.contract_address ??
+    receipt.recipient ??
+    null
+  );
 }
 
 function roundsFrom(receipt: Receipt): number | null {
@@ -111,24 +152,55 @@ const STATUS_NAMES: Record<number, string> = {
   6: "UNDETERMINED",
   7: "FINALIZED",
   8: "CANCELED",
+  9: "APPEAL_REVEALING",
+  10: "APPEAL_COMMITTING",
+  11: "READY_TO_FINALIZE",
+  12: "VALIDATORS_TIMEOUT",
+  13: "LEADER_TIMEOUT",
+  14: "LEADER_REVEALING",
 };
 
 function statusName(receipt: Receipt): string {
-  return (
-    receipt.statusName ??
-    receipt.status_name ??
-    STATUS_NAMES[receipt.status ?? -1] ??
-    `STATUS_${receipt.status}`
-  );
+  if (receipt.statusName) return receipt.statusName as string;
+  if (receipt.status_name) return receipt.status_name;
+  if (typeof receipt.status === "string") {
+    return /^\d+$/.test(receipt.status)
+      ? STATUS_NAMES[Number(receipt.status)] ?? `STATUS_${receipt.status}`
+      : receipt.status;
+  }
+  return STATUS_NAMES[Number(receipt.status ?? -1)] ?? `STATUS_${receipt.status}`;
 }
 
 function executionResult(receipt: Receipt): string | null {
   const studio = receipt.consensus_data?.leader_receipt?.[0]?.execution_result;
   if (studio) return studio;
-  const testnet = receipt.txExecutionResultName;
-  // Testnets phrase success as FINISHED_WITH_RETURN.
-  if (!testnet) return null;
-  return testnet.startsWith("FINISHED") ? "SUCCESS" : testnet;
+  if (receipt.txExecutionResultName) return receipt.txExecutionResultName;
+  return null;
+}
+
+/**
+ * A decision is not an execution.
+ *
+ * v0.6 is explicit about this: a transaction is successful only when its status
+ * is ACCEPTED or FINALIZED **and** its execution result is FINISHED_WITH_RETURN.
+ * `isSuccessful` encodes exactly that, and the SDK's own answer is used rather
+ * than a second opinion written here.
+ */
+function transactionSucceeded(receipt: Receipt): boolean {
+  try {
+    return Boolean(isSuccessful(receipt as unknown as Parameters<typeof isSuccessful>[0]));
+  } catch {
+    const status = statusName(receipt);
+    const execution = executionResult(receipt);
+    return (status === "ACCEPTED" || status === "FINALIZED") && execution === "FINISHED_WITH_RETURN";
+  }
+}
+
+/** Queue position, only while the transaction has not activated. */
+function queuePositionOf(receipt: Receipt): number | null {
+  if (receipt.queuePosition === undefined || receipt.queuePosition === null) return null;
+  const position = Number(receipt.queuePosition);
+  return Number.isFinite(position) ? position : null;
 }
 
 /**
@@ -190,10 +262,7 @@ function retryDelayMs(error: unknown): number | null {
   return null;
 }
 
-async function withRetries<T>(
-  operation: () => Promise<T>,
-  attempts = 5,
-): Promise<T> {
+async function withRetries<T>(operation: () => Promise<T>, attempts = 5): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -209,13 +278,33 @@ async function withRetries<T>(
   throw lastError;
 }
 
+/** Whether an operator has chosen to sign a quote that failed verification. */
+function allowUnverifiedFees(): boolean {
+  return process.env.RECOURSE_ALLOW_UNVERIFIED_FEES === "1";
+}
+
+/**
+ * How a transaction kit is obtained. Injectable so the no-network tests can
+ * exercise quoting, price protection and retries without a live chain — the
+ * decisions worth testing are ours, not the node's.
+ */
+export type KitFactory = (
+  config: GenLayerConfig,
+  privateKey: `0x${string}`,
+  options: { allowUnverified?: boolean },
+) => ForumKit;
+
 export class GenLayerForum implements AdjudicationForum {
   readonly id = "GENLAYER";
   private readonly config: GenLayerConfig;
+  private readonly kitFactory: KitFactory;
   private client: Client | null = null;
+  /** Address adjudications are signed with, once a key has been resolved. */
+  signer: string | null = null;
 
-  constructor(config: GenLayerConfig = loadGenLayerConfig()) {
+  constructor(config: GenLayerConfig = loadGenLayerConfig(), kitFactory: KitFactory = createForumKit) {
     this.config = config;
+    this.kitFactory = kitFactory;
   }
 
   get available(): boolean {
@@ -224,8 +313,8 @@ export class GenLayerForum implements AdjudicationForum {
 
   get description(): string {
     return this.available
-      ? `RecourseAdjudicator on ${this.config.networkLabel}`
-      : "RecourseAdjudicator is not deployed for this environment";
+      ? `RecourseAdjudicator on ${this.config.networkLabel} (chain ${this.config.chainId})`
+      : `RecourseAdjudicator is not deployed on ${this.config.networkLabel}`;
   }
 
   get network(): string {
@@ -234,6 +323,24 @@ export class GenLayerForum implements AdjudicationForum {
 
   get contractAddress(): string | null {
     return this.config.contractAddress;
+  }
+
+  get chainId(): number {
+    return this.config.chainId;
+  }
+
+  get explorerUrl(): string | null {
+    return this.available && this.config.explorer
+      ? `${this.config.explorer}${this.config.contractAddress}`
+      : null;
+  }
+
+  get warnings(): string[] {
+    return this.config.warnings;
+  }
+
+  get signerAddress(): string | null {
+    return this.signer;
   }
 
   private getClient(): Client {
@@ -257,13 +364,59 @@ export class GenLayerForum implements AdjudicationForum {
       ruling: null,
       failureReason: reason,
       finalizedAt: null,
+      fees: null,
+      feeAccounting: null,
+      queuePosition: null,
     };
   }
 
+  /**
+   * Keeps the signing account solvent on a Studio sandbox.
+   *
+   * Studio exposes `sim_fundAccount`, which is what makes the hosted sandbox
+   * usable without a faucet. It is used only when the account is short of the
+   * quoted deposit, and only on a Studio chain: on a public testnet there is no
+   * such facility, no fallback, and an unfunded key fails loudly instead of
+   * being quietly topped up from somewhere.
+   *
+   * Failure is non-fatal on purpose: a missing funding RPC must not be reported
+   * as a fee problem, and the submission that follows reports the truth either
+   * way.
+   */
+  private async ensureStudioFunding(required: bigint): Promise<string | null> {
+    if (!this.config.isStudio || required <= 0n) return null;
+    const account = this.config.privateKey ?? null;
+    if (!account) return null;
+
+    const client = this.getClient();
+    try {
+      const address = createAccount(account).address;
+      const balance = BigInt(await client.getBalance({ address }));
+      if (balance >= required) return null;
+
+      // Ask for whole GEN with headroom: the amount is a convenience top-up for
+      // a sandbox account, not an accounting operation.
+      const shortfallGen = Number((required - balance + 10n ** 18n - 1n) / 10n ** 18n);
+      const amount = Math.max(1, shortfallGen + 1);
+      await client.request({ method: "sim_fundAccount", params: [address, amount] });
+      return `Studio funded ${address} with ${amount} GEN so the quoted deposit (${required} wei) could be escrowed.`;
+    } catch (error) {
+      return `Could not top up the Studio account automatically (${describe(error)}). If the submission fails, fund the signer or deploy with a funded GENLAYER_PRIVATE_KEY.`;
+    }
+  }
+
+  /**
+   * Quotes and submits one adjudication.
+   *
+   * The order matters. The quote is taken first, then checked, then submitted
+   * unchanged: a deposit that is recalculated after verification is a deposit
+   * the verification did not cover.
+   */
   async submit(request: AdjudicationRequest): Promise<AdjudicationOutcome> {
-    if (!this.config.contractAddress) {
+    const address = this.config.contractAddress;
+    if (!address) {
       return this.unavailable(
-        "No RecourseAdjudicator contract address is configured. Run `npm run genlayer:deploy` and set GENLAYER_CONTRACT_ADDRESS.",
+        `No RecourseAdjudicator contract is configured for ${this.config.networkLabel}. Run \`npm run genlayer:deploy\` and set GENLAYER_CONTRACT_ADDRESS.`,
       );
     }
 
@@ -271,121 +424,217 @@ export class GenLayerForum implements AdjudicationForum {
       ...request.payload,
       inputsHash: documentHash(request.payload as unknown as Json),
     };
+    const args = [request.disputeId, JSON.stringify(payload)];
 
+    let forumKit: ForumKit;
     try {
-      const client = this.getClient();
-      const transactionHash = await withRetries(() =>
-        client.writeContract({
-          address: this.config.contractAddress as `0x${string}`,
-          functionName: "adjudicate",
-          args: [request.disputeId, JSON.stringify(payload)],
-          value: 0n,
+      forumKit = this.kitFactory(this.config, this.config.privateKey ?? createEphemeralKey(), {
+        allowUnverified: allowUnverifiedFees(),
+      });
+      this.signer = forumKit.signerAddress;
+    } catch (error) {
+      return this.unavailable(
+        `Could not build a signing provider for ${this.config.networkLabel}: ${describe(error)}`,
+      );
+    }
+
+    let quote;
+    try {
+      quote = await withRetries(() =>
+        forumKit.kit.estimate({ preset: "standard" }, {
+          kind: "write",
+          address: address as `0x${string}`,
+          method: "adjudicate",
+          args,
         }),
       );
+    } catch (error) {
+      return this.unavailable(
+        `Fee estimation failed on ${this.config.networkLabel}: ${describe(error)}. Nothing was submitted, so the escrow is still held.`,
+      );
+    }
+
+    const fees = quoteToDomain(quote, forumKit.profile, new Date().toISOString());
+
+    /*
+     * Price protection. A quote built against fee prices that have since moved
+     * is refused rather than signed: on a fee-charging network that is the
+     * difference between a transaction that settles and one that is cancelled
+     * at activation.
+     */
+    if (quote.verification.status === "mismatch" && !allowUnverifiedFees()) {
+      return {
+        status: "FAILED",
+        network: this.config.networkLabel,
+        contractAddress: address,
+        transactionHash: null,
+        networkStatus: null,
+        votes: null,
+        ruling: null,
+        failureReason: `The fee quote does not match ${this.config.networkLabel}'s live fee policy (expected ${quote.verification.expectedHash}, got ${quote.verification.actualHash}). Refusing to sign it; set RECOURSE_ALLOW_UNVERIFIED_FEES=1 only to override deliberately.`,
+        finalizedAt: null,
+        fees,
+        feeAccounting: null,
+        queuePosition: null,
+      };
+    }
+
+    const fundingNote = await this.ensureStudioFunding(quote.feeValue);
+
+    try {
+      const { genlayerTxId, evmTxHash } = await forumKit.kit.submit(quote, {
+        kind: "write",
+        address: address as `0x${string}`,
+        method: "adjudicate",
+        args,
+      });
 
       return {
         status: "SUBMITTED",
         network: this.config.networkLabel,
-        contractAddress: this.config.contractAddress,
-        transactionHash,
+        contractAddress: address,
+        // The GenLayer transaction id is the handle every read uses.
+        transactionHash: genlayerTxId ?? evmTxHash ?? null,
         networkStatus: "SUBMITTED",
         votes: null,
         ruling: null,
         failureReason: null,
         finalizedAt: null,
+        fees,
+        feeAccounting: null,
+        queuePosition: fees.queuePosition,
       };
     } catch (error) {
-      return this.unavailable(
-        `GenLayer submission failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      return {
+        ...this.unavailable(
+          `GenLayer submission failed: ${describe(error)}. The deposit was not consumed and the escrow remains held.${
+            fundingNote ? ` ${fundingNote}` : ""
+          }`,
+        ),
+        fees,
+      };
     }
   }
 
-  async poll(input: {
-    disputeId: string;
-    transactionHash: string;
-  }): Promise<AdjudicationOutcome> {
-    if (!this.config.contractAddress) {
-      return this.unavailable("No RecourseAdjudicator contract address is configured.");
+  async poll(input: { disputeId: string; transactionHash: string }): Promise<AdjudicationOutcome> {
+    const address = this.config.contractAddress;
+    if (!address) {
+      return this.unavailable("No RecourseAdjudicator contract is configured.");
     }
 
     const client = this.getClient();
     let receipt: Receipt;
     try {
-      receipt = (await client.getTransaction({
-        hash: input.transactionHash as Hash,
-      })) as Receipt;
+      receipt = (await withRetries(() =>
+        client.getTransaction({ hash: input.transactionHash as Hash }),
+      )) as Receipt;
     } catch (error) {
       return {
         status: "PENDING",
         network: this.config.networkLabel,
-        contractAddress: this.config.contractAddress,
+        contractAddress: address,
         transactionHash: input.transactionHash,
         networkStatus: null,
         votes: null,
         ruling: null,
-        failureReason: `Receipt not yet retrievable: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        failureReason: `Receipt not yet retrievable: ${describe(error)}`,
         finalizedAt: null,
+        queuePosition: null,
       };
     }
 
     const network = statusName(receipt);
     const votes = normalizeVotes(receipt);
     const execution = executionResult(receipt);
+    const queuePosition = queuePositionOf(receipt);
+    const lifecyclePhase = receipt.lifecycle?.phase ?? receipt.lifecycle?.state ?? null;
+    const feeAccounting = extractFeeAccounting(receipt);
 
-    const settled = network === "FINALIZED" || network === "ACCEPTED";
+    const decided = network === "ACCEPTED" || network === "FINALIZED";
+    const terminalFailure = [
+      "UNDETERMINED",
+      "CANCELED",
+      "VALIDATORS_TIMEOUT",
+      "LEADER_TIMEOUT",
+    ].includes(network);
 
-    if (!settled) {
+    if (!decided && !terminalFailure) {
       return {
         status: "PENDING",
         network: this.config.networkLabel,
-        contractAddress: this.config.contractAddress,
+        contractAddress: address,
         transactionHash: input.transactionHash,
-        networkStatus: network,
+        networkStatus: lifecyclePhase ? `${network} · ${lifecyclePhase}` : network,
         votes,
         ruling: null,
         failureReason: null,
         finalizedAt: null,
+        queuePosition,
+        feeAccounting,
       };
     }
 
-    if (execution && execution !== "SUCCESS") {
+    if (terminalFailure) {
       return {
         status: "FAILED",
         network: this.config.networkLabel,
-        contractAddress: this.config.contractAddress,
+        contractAddress: address,
         transactionHash: input.transactionHash,
         networkStatus: network,
         votes,
         ruling: null,
-        failureReason: `Contract execution returned ${execution}`,
+        failureReason: `The network ${network === "CANCELED" ? "cancelled" : "failed to decide"} this transaction (${network}). The escrow is still held.`,
         finalizedAt: null,
+        queuePosition: null,
+        feeAccounting,
+      };
+    }
+
+    /*
+     * Decided is not executed. On v0.6 the two are separate facts, and a
+     * contract that raised after consensus would otherwise be reported as a
+     * ruling nobody could act on.
+     */
+    if (!transactionSucceeded(receipt)) {
+      const failed = execution ?? "an execution result the node did not report";
+      return {
+        status: "FAILED",
+        network: this.config.networkLabel,
+        contractAddress: address,
+        transactionHash: input.transactionHash,
+        networkStatus: network,
+        votes,
+        ruling: null,
+        failureReason: `The transaction was decided (${network}) but the contract did not finish successfully: ${failed}.`,
+        finalizedAt: null,
+        queuePosition: null,
+        feeAccounting,
       };
     }
 
     // The authoritative ruling is contract state, not the transaction log.
     let raw: unknown;
     try {
-      raw = await client.readContract({
-        address: this.config.contractAddress as `0x${string}`,
-        functionName: "get_ruling",
-        args: [input.disputeId],
-      });
+      raw = await withRetries(() =>
+        client.readContract({
+          address: address as `0x${string}`,
+          functionName: "get_ruling",
+          args: [input.disputeId],
+        }),
+      );
     } catch (error) {
       return {
         status: "PENDING",
         network: this.config.networkLabel,
-        contractAddress: this.config.contractAddress,
+        contractAddress: address,
         transactionHash: input.transactionHash,
         networkStatus: network,
         votes,
         ruling: null,
-        failureReason: `Ruling not yet readable: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        failureReason: `Ruling not yet readable: ${describe(error)}`,
         finalizedAt: null,
+        queuePosition: null,
+        feeAccounting,
       };
     }
 
@@ -394,7 +643,7 @@ export class GenLayerForum implements AdjudicationForum {
       return {
         status: typeof raw === "string" && raw.trim() === "" ? "PENDING" : "FAILED",
         network: this.config.networkLabel,
-        contractAddress: this.config.contractAddress,
+        contractAddress: address,
         transactionHash: input.transactionHash,
         networkStatus: network,
         votes,
@@ -404,13 +653,15 @@ export class GenLayerForum implements AdjudicationForum {
             ? null
             : "Adjudication returned a ruling the protocol cannot act on.",
         finalizedAt: null,
+        queuePosition: null,
+        feeAccounting,
       };
     }
 
     return {
       status: "FINALIZED",
       network: this.config.networkLabel,
-      contractAddress: this.config.contractAddress,
+      contractAddress: address,
       transactionHash: input.transactionHash,
       networkStatus: network,
       votes,
@@ -418,8 +669,25 @@ export class GenLayerForum implements AdjudicationForum {
       ruling,
       failureReason: null,
       finalizedAt: new Date().toISOString(),
+      queuePosition: null,
+      feeAccounting,
     };
   }
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * An ephemeral key for an unconfigured environment.
+ *
+ * It cannot fund a fee deposit, which is exactly why the caller is warned: on a
+ * fee-charging network the quote will be refused by the network rather than
+ * silently underpaid.
+ */
+function createEphemeralKey(): `0x${string}` {
+  return generatePrivateKey();
 }
 
 /**
@@ -429,8 +697,9 @@ export class GenLayerForum implements AdjudicationForum {
 export class UnavailableForum implements AdjudicationForum {
   readonly id = "GENLAYER";
   readonly available = false;
+  readonly signer = null;
   readonly description =
-    "No adjudication forum is configured for this environment. Deploy the RecourseAdjudicator to enable judgment.";
+    "No adjudication forum is configured for this environment. Deploy the RecourseAdjudicator to Studio Next (`npm run genlayer:deploy`) and set GENLAYER_CONTRACT_ADDRESS to enable judgment.";
 
   private outcome(): AdjudicationOutcome {
     return {
@@ -443,6 +712,9 @@ export class UnavailableForum implements AdjudicationForum {
       ruling: null,
       failureReason: this.description,
       finalizedAt: null,
+      fees: null,
+      feeAccounting: null,
+      queuePosition: null,
     };
   }
 

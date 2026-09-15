@@ -97,6 +97,10 @@ export const serverAdapter: RecourseApi = {
       label: info.adjudication.network ?? "NO ADJUDICATION FORUM",
       chain: info.adjudication.available ? "GenLayer" : "none",
       adapter: `${info.payment.rail} + ${info.adjudication.available ? "genlayer" : "unavailable"}`,
+      chainId: info.adjudication.chainId,
+      rpcUrl: info.adjudication.rpcUrl,
+      networkCanChargeFees: info.adjudication.fees.networkCanCharge,
+      feeProfile: info.adjudication.fees.feeProfileFile,
       blockHeight:
         height === null
           ? {

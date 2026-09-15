@@ -76,15 +76,27 @@ export function createHttpAdapter(baseUrl: string): RecourseApi {
     async getNetworkStatus(): Promise<NetworkStatus> {
       const info = await get<{
         mode: NetworkStatus["mode"];
-        adjudication: { available: boolean; network: string | null };
+        adjudication: {
+          available: boolean;
+          network: string | null;
+          chainId: number | null;
+          rpcUrl: string | null;
+          fees: { networkCanCharge: boolean; feeProfileFile: string };
+        };
         payment: { rail: string };
       }>("/api/network");
 
       return {
         mode: info?.mode ?? "SIMULATED",
         label: info?.adjudication.network ?? "NO ADJUDICATION FORUM",
-        chain: info?.adjudication.available ? "GenLayer" : "none",
+        chain: info?.adjudication.available
+          ? `GenLayer${info.adjudication.chainId ? ` · ${info.adjudication.chainId}` : ""}`
+          : "none",
         adapter: `http · ${info?.payment.rail ?? "unknown"}`,
+        chainId: info?.adjudication.chainId ?? null,
+        rpcUrl: info?.adjudication.rpcUrl ?? null,
+        networkCanChargeFees: info?.adjudication.fees?.networkCanCharge,
+        feeProfile: info?.adjudication.fees?.feeProfileFile ?? null,
         blockHeight: {
           value: null,
           provenance: "NOT_AVAILABLE",

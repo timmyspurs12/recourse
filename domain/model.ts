@@ -230,6 +230,60 @@ export interface Ruling {
   reasoningSummary: string;
 }
 
+/**
+ * The fee deposit the protocol quoted and submitted for one adjudication.
+ *
+ * Consensus v0.6 requires a fee distribution and its quoted value on every
+ * write. This is the protocol's own record of what it sent: a *deposit*, which
+ * is escrowed up front and largely refunded at finalization — deliberately not
+ * presented as a cost, because the two are different numbers.
+ */
+export interface AdjudicationFeeQuote {
+  depositWei: string;
+  userValueWei: string;
+  totalWei: string;
+  /** True when the network's fee accounting is disabled: no deposit was taken. */
+  gasless: boolean;
+  /** Whether the allocation came from a measured profile or network defaults. */
+  source: "developer" | "network-default";
+  breakdown: {
+    timeUnitFeesWei: string;
+    executionBudgetWei: string;
+    messageFeesWei: string;
+  };
+  caps: {
+    genPerTimeUnitWei: string;
+    storagePriceWei: string;
+    receiptPriceWei: string;
+  };
+  verification: {
+    status: "verified" | "mismatch" | "unavailable";
+    expectedFeeConfigHash: string | null;
+    actualFeeConfigHash: string | null;
+  };
+  /** The measured profile this quote drew on, or null when none was usable. */
+  profileFile: string | null;
+  /** Why no profile was used, when one was missing or measured elsewhere. */
+  profileNote: string | null;
+  /** Pending transactions ahead of this one at quote time, when reported. */
+  queuePosition: number | null;
+  quotedAt: string;
+}
+
+/**
+ * What actually happened to the deposit. Reported by the network, never
+ * derived: an empty record means the receipt did not carry accounting, not that
+ * nothing was consumed.
+ */
+export interface AdjudicationFeeAccounting {
+  /** Which receipt field the numbers came from, so a reviewer can re-read it. */
+  source: string;
+  depositWei: string | null;
+  consumedWei: string | null;
+  refundedWei: string | null;
+  reportedAt: string | null;
+}
+
 export interface Adjudication {
   id: string;
   disputeId: string;
@@ -249,6 +303,10 @@ export interface Adjudication {
   failureReason: string | null;
   submittedAt: string;
   finalizedAt: string | null;
+  /** Consensus v0.6 fee deposit quoted and submitted for this referral. */
+  fees: AdjudicationFeeQuote | null;
+  /** Consumption and refund, when a receipt reported them. */
+  feeAccounting: AdjudicationFeeAccounting | null;
 }
 
 /* ------------------------------------------------------------- settlement */

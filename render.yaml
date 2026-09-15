@@ -11,8 +11,14 @@ services:
       mountPath: /app/.recourse
       sizeGB: 1
     envVars:
+      # Studio Next (Consensus v0.6, chain 61997) — the network the hackathon
+      # requires. The contract address is written by `npm run genlayer:deploy`;
+      # set GENLAYER_CONTRACT_ADDRESS here once you have one.
       - key: GENLAYER_NETWORK
-        value: studionet
+        value: studio-next
+      # Every adjudication on a fee-charging network spends GEN from this key.
+      - key: GENLAYER_PRIVATE_KEY
+        sync: false
       - key: RECOURSE_REQUIRE_AUTH
         value: "1"
       - key: RECOURSE_STORE_FILE

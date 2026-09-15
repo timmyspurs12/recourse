@@ -18,7 +18,7 @@ export default async function DemoPage() {
 
   const detail = info.adjudication.available
     ? `Adjudication is real: contested terms are submitted to the RecourseAdjudicator Intelligent Contract on ${info.adjudication.network} and ruled on by live validators. ${info.payment.note}`
-    : `No adjudication forum is configured, so the dispute path will stop at ADJUDICATING. ${info.payment.note}`;
+    : `No adjudication forum is configured for this deployment, so the dispute path will stop at ADJUDICATING and the escrow will stay held. Deploy the RecourseAdjudicator to Studio Next with \`npm run genlayer:deploy\`, then set GENLAYER_CONTRACT_ADDRESS. ${info.payment.note}`;
 
   return (
     <PageContainer>

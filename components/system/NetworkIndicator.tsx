@@ -101,6 +101,24 @@ export function NetworkIndicator({
               <dt className="mono-label">Chain</dt>
               <dd className="font-mono text-xs text-fg-muted">{status.chain}</dd>
             </div>
+            {status.chainId ? (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="mono-label">Chain id</dt>
+                <dd className="font-mono text-xs tnum text-fg-muted">{status.chainId}</dd>
+              </div>
+            ) : null}
+            {status.networkCanChargeFees === undefined || status.networkCanChargeFees === null ? null : (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="mono-label">Fees</dt>
+                <dd className="font-mono text-xs text-fg-muted">
+                  {status.networkCanChargeFees
+                    ? status.feeProfile
+                      ? "measured profile"
+                      : "network default"
+                    : "none"}
+                </dd>
+              </div>
+            )}
             <div className="flex items-baseline justify-between gap-3">
               <dt className="mono-label">Adapter</dt>
               <dd className="font-mono text-xs text-fg-muted">{status.adapter}</dd>

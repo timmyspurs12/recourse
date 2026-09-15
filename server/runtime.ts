@@ -36,8 +36,21 @@ export interface RuntimeInfo {
     forum: "GENLAYER";
     available: boolean;
     network: string | null;
+    chainId: number | null;
+    rpcUrl: string | null;
+    explorer: string | null;
     contractAddress: string | null;
+    /** Address the protocol signs adjudications with, when it has one. */
+    signer: string | null;
     description: string;
+    /**
+     * Consensus v0.6 facts a reviewer can check without running anything: does
+     * this network price deploy/write, and is a measured fee profile in use?
+     */
+    fees: {
+      networkCanCharge: boolean;
+      feeProfileFile: string;
+    };
   };
   payment: {
     rail: string;
@@ -98,14 +111,31 @@ export function getRuntime(): Runtime {
   const publicTestnet =
     genlayer.networkKey === "testnet-asimov" || genlayer.networkKey === "testnet-bradbury";
 
+  /*
+   * Studio Next is a hosted development network: real validators, real
+   * consensus, and the network the hackathon requires. It is reported as DEMO
+   * because its contracts can be reset, while a public testnet deployment is
+   * reported as LIVE because a stranger can verify it for weeks. Over-claiming
+   * here would be the easiest lie in the product.
+   */
   const info: RuntimeInfo = {
     mode: !forum.available ? "SIMULATED" : publicTestnet ? "LIVE" : "DEMO",
     adjudication: {
       forum: "GENLAYER",
       available: forum.available,
       network: forum.available ? genlayer.networkLabel : null,
+      chainId: forum.available ? genlayer.chainId : null,
+      rpcUrl: forum.available ? genlayer.rpcUrl : null,
+      explorer: forum.available && genlayer.explorer && genlayer.contractAddress
+        ? `${genlayer.explorer}${genlayer.contractAddress}`
+        : null,
       contractAddress: genlayer.contractAddress,
+      signer: (forum as { signer?: string | null }).signer ?? null,
       description: forum.description,
+      fees: {
+        networkCanCharge: genlayer.feeBearing,
+        feeProfileFile: genlayer.feeProfileFile,
+      },
     },
     payment: {
       rail: rail.id,

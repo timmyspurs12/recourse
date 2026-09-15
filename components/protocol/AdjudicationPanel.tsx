@@ -153,6 +153,65 @@ export function AdjudicationPanel({
           )}
         </div>
       </div>
+
+      {/*
+        * Fees (Consensus v0.6). The deposit is what the protocol escrowed
+        * against the network's live prices; consumption and refund are the
+        * node's numbers. They are shown as separate rows precisely because they
+        * are different facts, and the panel refuses to derive one from another.
+        */}
+      {adjudication.fees ? (
+        <div className="border-t border-line px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="mono-label">Transaction fee</p>
+            <ProvenanceTag provenance={adjudication.fees.provenance} />
+          </div>
+          {adjudication.fees.value === null ? (
+            <div className="mt-2">
+              <UnavailableValue note={adjudication.fees.note} />
+            </div>
+          ) : (
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+              <div>
+                <dt className="mono-label text-fg-faint">Deposit escrowed</dt>
+                <dd className="mt-1 font-mono text-xs tnum text-fg">
+                  {adjudication.fees.value.gasless ? "gasless" : adjudication.fees.value.deposit}
+                </dd>
+              </div>
+              <div>
+                <dt className="mono-label text-fg-faint">Allocation</dt>
+                <dd className="mt-1 font-mono text-xs text-fg-muted">
+                  {adjudication.fees.value.source === "developer" ? "measured profile" : "network default"}
+                </dd>
+              </div>
+              <div>
+                <dt className="mono-label text-fg-faint">Price policy</dt>
+                <dd
+                  className={`mt-1 font-mono text-xs ${
+                    adjudication.fees.value.policy === "verified" ? "text-pass" : "text-pending"
+                  }`}
+                >
+                  {adjudication.fees.value.policy}
+                </dd>
+              </div>
+              <div>
+                <dt className="mono-label text-fg-faint">Consumed / refunded</dt>
+                <dd className="mt-1 font-mono text-xs tnum text-fg-muted">
+                  {adjudication.feeAccounting?.value
+                    ? `${adjudication.feeAccounting.value.consumed ?? "—"} / ${
+                        adjudication.feeAccounting.value.refunded ?? "—"
+                      }`
+                    : "not reported"}
+                </dd>
+              </div>
+            </dl>
+          )}
+          <p className="mt-3 text-[11px] leading-relaxed text-fg-faint">
+            {adjudication.fees.value?.profileNote ??
+              "The deposit is escrowed against the network's published price ceilings and refunded at finalization; unused budget is returned to the protocol's wallet, not to the buyer."}
+          </p>
+        </div>
+      ) : null}
     </Panel>
   );
 }
