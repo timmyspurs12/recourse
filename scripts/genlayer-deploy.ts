@@ -1,0 +1,257 @@
+#!/usr/bin/env tsx
+/**
+ * Deploys the RecourseAdjudicator Intelligent Contract to a GenLayer network.
+ *
+ *   npm run genlayer:deploy                                    # Studio Next
+ *   npm run genlayer:deploy -- --network testnet-bradbury --key 0x...
+ *
+ * Consensus v0.6 changed three things about deploying, and each one bites
+ * silently if it is done the old way:
+ *
+ *  1. **A deploy carries a fee.** The deposit is quoted from a measured fee
+ *     profile plus the network's live prices, and submitted unchanged. The
+ *     Transaction Kit performs that quote here, over a private-key-backed
+ *     provider — the same path the running protocol uses, so what is verified
+ *     in production is what is verified at deploy time.
+ *  2. **The deployed address moved.** Studios report it in
+ *     `data.contract_address`; v0.6 receipts carry it in
+ *     `txDataDecoded.contractAddress`. Reading only one of those loses the
+ *     address of a deployment that actually succeeded — and a lost address is
+ *     indistinguishable from a failed deployment unless we check both.
+ *  3. **Success is two facts.** `ACCEPTED`/`FINALIZED` says the network
+ *     decided; `FINISHED_WITH_RETURN` says the contract ran. `isSuccessful`
+ *     requires both.
+ */
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { createAccount, createClient } from "genlayer-js";
+import type { Hash } from "genlayer-js/types";
+import { generatePrivateKey } from "viem/accounts";
+import { loadGenLayerConfig } from "../integrations/genlayer/config";
+import { createForumKit, formatGen } from "../integrations/genlayer/fees";
+import { ADJUDICATOR_SOURCE } from "../integrations/genlayer/config";
+
+/*
+ * Flags as well as environment variables.
+ *
+ * `VAR=value npm run ...` is bash-only: it fails in PowerShell and cmd, which is
+ * where most Windows users end up. Flags work everywhere.
+ */
+function flag(name: string): string | undefined {
+  const index = process.argv.indexOf(`--${name}`);
+  return index !== -1 && process.argv[index + 1] ? process.argv[index + 1] : undefined;
+}
+
+const env: Record<string, string | undefined> = { ...process.env };
+if (flag("network")) env.GENLAYER_NETWORK = flag("network");
+if (flag("key")) env.GENLAYER_PRIVATE_KEY = flag("key");
+
+const config = loadGenLayerConfig(env);
+
+/*
+ * Validate the key here rather than letting the curve library fail with
+ * "invalid private key, expected hex or 32 bytes, got string", which says
+ * nothing about what to do next. Pasting the placeholder from the docs is an
+ * easy and very common mistake.
+ */
+const rawKey = env.GENLAYER_PRIVATE_KEY?.trim();
+if (rawKey !== undefined) {
+  const normalized = rawKey.startsWith("0x") ? rawKey.slice(2) : rawKey;
+  if (!/^[0-9a-fA-F]{64}$/.test(normalized)) {
+    console.error(`That is not a private key: "${rawKey}"`);
+    console.error("");
+    if (/YOUR|KEY|xxx|<|>/i.test(rawKey)) {
+      console.error("It looks like a placeholder was pasted literally.");
+    }
+    console.error("A key is 64 hex characters, usually written with a 0x prefix.");
+    console.error("");
+    console.error("Generate one with:   npm run wallet");
+    console.error("Then fund it at:     https://testnet-faucet.genlayer.foundation/");
+    process.exit(1);
+  }
+}
+
+const privateKey = rawKey
+  ? ((rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`) as `0x${string}`)
+  : generatePrivateKey();
+const account = createAccount(privateKey);
+if (!rawKey) {
+  console.log("No GENLAYER_PRIVATE_KEY set — using an ephemeral account for this deployment.");
+}
+
+console.log(`network:  ${config.networkLabel} (chain ${config.chainId})`);
+console.log(`rpc:      ${config.rpcUrl}`);
+console.log(`deployer: ${account.address}`);
+console.log(`contract: ${ADJUDICATOR_SOURCE}`);
+for (const warning of config.warnings) console.log(`warning:  ${warning}`);
+
+const client = createClient({ chain: config.chain, account });
+
+/* ------------------------------------------------------------------ funding */
+
+/*
+ * Studio sandboxes can fund an account themselves; public testnets cannot, and
+ * an unfunded wallet there fails deep inside the RPC layer with a message that
+ * buries the word "funds". So: on Studio, top up through the sandbox facility;
+ * everywhere else, check the balance and stop with instructions.
+ */
+try {
+  const balance = BigInt(await client.getBalance({ address: account.address }));
+  console.log(`balance:  ${formatGen(balance) ?? `${balance} wei`}`);
+
+  if (config.isStudio) {
+    if (rawKey === undefined) {
+      // Ephemeral account: fund it through the sandbox so the deploy can pay
+      // whatever the quote asks for.
+      await client.request({ method: "sim_fundAccount", params: [account.address, 50] });
+      console.log("funding:  Studio funded this ephemeral account with 50 GEN");
+    }
+  } else if (balance === 0n) {
+    console.error("\nThis wallet has no GEN, so the deployment will be rejected.");
+    console.error("Fund it at https://testnet-faucet.genlayer.foundation/");
+    console.error(`  address: ${account.address}`);
+    console.error("\nThen run this command again.");
+    process.exit(1);
+  }
+} catch (error) {
+  console.log(
+    `balance:  could not be read or funded (${error instanceof Error ? error.message : String(error)}); attempting the deployment anyway`,
+  );
+}
+
+/* -------------------------------------------------------------------- deploy */
+
+const code = readFileSync(ADJUDICATOR_SOURCE, "utf-8");
+const { kit, profile } = createForumKit(config, privateKey, {
+  allowUnverified: process.env.RECOURSE_ALLOW_UNVERIFIED_FEES === "1",
+});
+
+if (profile.note) console.log(`fee note: ${profile.note}`);
+
+const deployTx = { kind: "deploy" as const, code, args: [] as unknown[] };
+
+const quote = await kit.estimate({ preset: "standard" }, deployTx);
+console.log(
+  `fee:      deposit ${formatGen(quote.feeValue) ?? `${quote.feeValue} wei`}` +
+    ` (${quote.source === "developer" ? "measured profile" : "network default"})` +
+    ` · policy ${quote.verification.status}` +
+    (quote.gasless ? " · gasless" : ""),
+);
+
+if (quote.verification.status === "mismatch" && process.env.RECOURSE_ALLOW_UNVERIFIED_FEES !== "1") {
+  console.error("\nThe quote does not match the network's live fee policy:");
+  console.error(`  quoted against: ${quote.verification.expectedHash}`);
+  console.error(`  network now:    ${quote.verification.actualHash}`);
+  console.error("\nDeploying anyway risks a transaction that is cancelled at activation.");
+  console.error("Re-run to take a fresh quote, or set RECOURSE_ALLOW_UNVERIFIED_FEES=1 to override.");
+  process.exit(1);
+}
+
+const { genlayerTxId } = await kit.submit(quote, deployTx);
+console.log(`deploy tx: ${genlayerTxId}`);
+
+const tracked = await kit.track(genlayerTxId, (status) => {
+  if (status.queuePosition !== undefined) {
+    console.log(`  ${status.phase} · queue position ${status.queuePosition}`);
+  } else {
+    console.log(`  ${status.phase}${status.statusName ? ` · ${status.statusName}` : ""}`);
+  }
+}, { until: "finalized" });
+
+/*
+ * Read the receipt for the address: `track` reports what the SDK normalised,
+ * and the receipt is the source of truth if it disagrees.
+ */
+const receipt = await client.getTransaction({ hash: genlayerTxId as unknown as Hash });
+const address =
+  tracked.contractAddress ??
+  (receipt as { txDataDecoded?: { contractAddress?: string } }).txDataDecoded?.contractAddress ??
+  (receipt as { data?: { contract_address?: string } }).data?.contract_address ??
+  null;
+
+if (!address) {
+  console.error("\nThe deployment was tracked but no contract address was reported.");
+  console.error(`execution: ${tracked.executionResultName ?? "not reported"}`);
+  const stderr = (
+    receipt as { consensus_data?: { leader_receipt?: Array<{ genvm_result?: { stderr?: string } }> } }
+  ).consensus_data?.leader_receipt?.[0]?.genvm_result?.stderr;
+  if (stderr) console.error(stderr.slice(0, 4000));
+  console.error("\nNothing was written to the deployment files. Re-run when the network is healthy.");
+  process.exit(1);
+}
+
+/* ----------------------------------------------------------------- recording */
+
+const stamp = new Date().toISOString();
+const explorer = config.explorer ? `${config.explorer}${address}` : null;
+
+// Local record: what this machine deployed.
+const localFile = config.deploymentFile;
+mkdirSync(dirname(localFile), { recursive: true });
+writeFileSync(
+  localFile,
+  `${JSON.stringify(
+    {
+      default: config.networkKey,
+      deployments: {
+        [config.networkKey]: {
+          address,
+          chainId: config.chainId,
+          rpcUrl: config.rpcUrl,
+          deployedAt: stamp,
+          deployTx: genlayerTxId,
+          deployer: account.address,
+          explorer,
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`,
+);
+
+/*
+ * Committed record: so a fresh clone — and the submission's contract link —
+ * points at this deployment for this network instead of an older one, while
+ * leaving deployments on other networks intact.
+ */
+const committedFile = config.committedDeploymentFile;
+let committed: {
+  note?: string;
+  default?: string;
+  deployments?: Record<string, unknown>;
+} = {};
+try {
+  committed = JSON.parse(readFileSync(committedFile, "utf-8")) as typeof committed;
+} catch {
+  committed = {};
+}
+committed.note =
+  "Default RecourseAdjudicator deployments, one per network. Override with GENLAYER_CONTRACT_ADDRESS, or redeploy with `npm run genlayer:deploy`.";
+committed.default = config.networkKey;
+committed.deployments = {
+  ...(committed.deployments ?? {}),
+  [config.networkKey]: {
+    address,
+    chainId: config.chainId,
+    rpcUrl: config.rpcUrl,
+    deployedAt: stamp,
+    deployTx: genlayerTxId,
+    explorer,
+  },
+};
+writeFileSync(committedFile, `${JSON.stringify(committed, null, 2)}\n`);
+
+console.log(`\nRecourseAdjudicator deployed on ${config.networkLabel}`);
+console.log(`  address:     ${address}`);
+console.log(`  status:      ${tracked.statusName ?? tracked.phase}`);
+console.log(`  execution:   ${tracked.executionResultName ?? "not reported"}`);
+console.log(`  deposit:     ${formatGen(quote.feeValue) ?? `${quote.feeValue} wei`}`);
+console.log(`  recorded in: ${localFile}`);
+console.log(`  committed:   ${committedFile}`);
+if (explorer) {
+  console.log(`\nExplorer link (use this for the hackathon submission):\n  ${explorer}`);
+}
+console.log(`\nPin it in your deployment environment with:`);
+console.log(`  GENLAYER_NETWORK=${config.networkKey}`);
+console.log(`  GENLAYER_CONTRACT_ADDRESS=${address}`);

@@ -4,6 +4,16 @@ Everything the form at
 [portal.genlayer.foundation/agent-tank/hackathon/submit](https://portal.genlayer.foundation/agent-tank/hackathon/submit)
 asks for, pre-written. Closes **Sep 17, 15:30 UTC**.
 
+> **Two values to fill in after deploying** (everything else below is final):
+>
+> | Field | Where it comes from |
+> | --- | --- |
+> | Live URL | your host's domain, e.g. `https://recourse-production-….up.railway.app` |
+> | Contract address | `npm run genlayer:deploy` prints it; it lands in `genlayer.deployment.json` |
+>
+> Both must refer to **Studio Next** (chain 61997). A deployment on stable
+> Studionet (61999) or Bradbury (4221) is not eligible.
+
 ---
 
 ## 00 · Track
@@ -67,7 +77,9 @@ Strongly recommended. 90 seconds, screen recording, no narration required:
 1. `/` — the thesis, 5 seconds.
 2. `/demo` — pick **Promise breached**, hit run. Let it sit on `AWAITING CONSENSUS`; say
    out loud that this is a real wait for real validators.
-3. Settlement lands `REFUNDED`. Click through to the dossier.
+3. Settlement lands `REFUNDED`. Click through to the dossier. On the referral
+   panel, point at the **Transaction fee** block: the deposit was quoted against
+   Studio Next's live price ceilings and the policy reads `verified`.
 4. `/disputes/dsp_rc-000042` — scroll to **Validator set and consensus**: five real validator
    addresses, three agree, real transaction hash.
 5. Switch to **Promise satisfied** and run it: released in ~2 seconds, no adjudication.
@@ -81,33 +93,37 @@ column for the short label and paste the instruction beside it.
 
 | # | Heading | Instruction |
 | --- | --- | --- |
-| 01 | Open the live demo | Go to https://recourse-production-bf02.up.railway.app/demo and choose "Promise breached". No wallet, API key or setup is needed. |
+| 01 | Open the live demo | Go to <LIVE URL>/demo and choose "Promise breached". No wallet, API key or setup is needed. |
 | 02 | Read the agreement first | The panel lists five machine-readable terms: at least 5 sources, sources under 30 days old, Lagos scope, exactly 4 sections, and material accuracy. Only the last one is semantic. |
 | 03 | Run the protected purchase | Press "Run protected purchase". $1.00 USDC is escrowed against a hash of that agreement before the merchant delivers anything. |
 | 04 | Watch the split | The header reports "4 resolved locally / 1 referred to GenLayer". The merchant delivered 2 of 5 sources; the protocol records 2 < 5 as a BREACH in code, with no model involved. |
-| 05 | Wait for real consensus | The run pauses at ADJUDICATING for roughly 25-60 seconds. This is a genuine wait for GenLayer validators on Bradbury, not an animation. Escrow stays held throughout. |
+| 05 | Wait for real consensus | The run pauses at ADJUDICATING for roughly 25-60 seconds. This is a genuine wait for GenLayer validators on Studio Next (Consensus v0.6), not an animation. Escrow stays held throughout. |
 | 06 | Check the ruling | The ruling is BUYER_WINS and $1.00 is REFUNDED. Open the dispute dossier to see the transaction hash and each validator address with the vote it cast, exactly as the network reported them. |
 | 07 | Confirm the merchant can win | Choose "Promise satisfied" and run again. Every mandatory term passes, no adjudication happens at all, and the merchant is paid in about 2 seconds. |
-| 08 | Verify the contract | The RecourseAdjudicator Intelligent Contract is at https://explorer-bradbury.genlayer.com/address/0xed3493996D6cfEA8100efa31422Fb0a1f0988989 |
-| 09 | Run it yourself (optional) | git clone https://github.com/timmyspurs12/recourse && cd recourse && npm install && npm run seed && npm run dev |
-| 10 | Run the tests (optional) | npm test runs 41 tests covering the lifecycle, adversarial cases and agent authentication. npm run test:live submits two real adjudications on-network, one ruling for the buyer and one for the merchant. |
+| 08 | Check what the ruling cost | The **Transaction fee** block records the deposit that was escrowed and the fee-config hash the quote was signed against. Consumption and refund are reported as the node reports them — the panel never infers one from the other. |
+| 09 | Verify the contract | The RecourseAdjudicator Intelligent Contract is at https://explorer-studio-dev.genlayer.com/address/<CONTRACT ADDRESS>, deployed on Studio Next (chain 61997). |
+| 10 | Run it yourself (optional) | git clone https://github.com/timmyspurs12/recourse && cd recourse && npm install && npm run genlayer:deploy && npm run seed && npm run dev. npm test runs 58 tests covering the lifecycle, adversarial cases, agent authentication, and the Studio Next network and fee rules. npm run test:live submits two real adjudications on-network. |
 
 ## 06 · Review verification — expected outcome (500 max)
 
 **487 / 500 characters — verified.**
 
 ```
-Open https://recourse-production-bf02.up.railway.app/demo, choose "Promise breached", press Run. Header shows "4 resolved locally / 1 referred to GenLayer". Verification records 2 < 5 as BREACH in code; the contested term goes to RecourseAdjudicator on GenLayer Bradbury (0xed3493996D6cfEA8100efa31422Fb0a1f0988989). After real consensus the ruling is BUYER_WINS and $1.00 is REFUNDED, with a real tx hash and validator votes. "Promise satisfied" instead releases to the merchant in ~2s.
+Open <LIVE URL>/demo, choose "Promise breached", press Run. Header shows "4 resolved locally / 1 referred to GenLayer". Verification records 2 < 5 as BREACH in code; the contested term goes to RecourseAdjudicator on Studio Next, chain 61997 (<CONTRACT ADDRESS>). After real consensus the ruling is BUYER_WINS and $1.00 is REFUNDED, with a real transaction hash and the validator votes the node reported. The referral panel shows the fee deposit that was escrowed and the quoted fee policy as verified. "Promise satisfied" instead releases to the merchant in ~2s.
 ```
 
 ## 06 · Contract links (optional — but add it)
 
 ```
-https://explorer-bradbury.genlayer.com/address/0xed3493996D6cfEA8100efa31422Fb0a1f0988989
+https://explorer-studio-dev.genlayer.com/address/<CONTRACT ADDRESS>
 ```
 
-Deployed `RecourseAdjudicator` on GenLayer Testnet Bradbury — a public testnet with a public
-explorer, so a reviewer can verify the rulings without taking anything on trust.
+Deployed `RecourseAdjudicator` on **GenLayer Studio Next** (Consensus v0.6, chain 61997) — the
+network the hackathon requires — so every ruling in the live app is verifiable on a public
+explorer without taking anything on trust.
+
+*If you also keep a Bradbury deployment for durable verification, say which network the running
+demo uses. The panel checks.*
 
 ## 07 · Project links
 
@@ -168,6 +184,11 @@ The build's credibility rests on being straight about what is real. Keep saying 
   rules both directions.
 - **Real:** x402 cryptography — signatures verified by recovery; tampering, expiry and replay
   rejected.
+- **Real:** fee submission on Consensus v0.6 — every write carries a quoted fee distribution
+  (transaction kit over a measured profile, or network defaults inside live caps) and the quote is
+  refused if it disagrees with the network's live fee policy.
+- **Not claimed:** fee consumption and refund. The deposit is what the protocol escrowed; the other
+  two are shown only when a receipt reports them, otherwise `NOT AVAILABLE`.
 - **Not performed:** on-chain settlement. No funded facilitator, so escrow movement is recorded as
   `SIGNATURE_VERIFIED_LOCAL_ESCROW` with a **null** transaction hash. There is not one invented
   hash in the repository.

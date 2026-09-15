@@ -1,3 +1,4 @@
+import { formatGen } from "@/domain/shared/money";
 import type {
   Adjudication as DomainAdjudication,
   Agreement as DomainAgreement,
@@ -333,6 +334,54 @@ function presentAdjudication(
           value: null,
           provenance: "NOT_AVAILABLE",
           note: "The network has not reported validator detail for this transaction yet.",
+        },
+    /*
+     * Fees, stated as three separate facts.
+     *
+     * The deposit is ours — quoted from the network's prices and submitted
+     * unchanged. Consumption and refund are the node's, and are only shown when
+     * a receipt actually carried them. Collapsing the three into one number is
+     * how a deposit gets read as a cost.
+     */
+    fees: adjudication.fees
+      ? {
+          value: {
+            deposit: formatGen(adjudication.fees.depositWei) ?? `${adjudication.fees.depositWei} wei`,
+            depositWei: adjudication.fees.depositWei,
+            source: adjudication.fees.source,
+            policy: adjudication.fees.verification.status,
+            gasless: adjudication.fees.gasless,
+            quoteHash:
+              adjudication.fees.verification.expectedFeeConfigHash ??
+              adjudication.fees.verification.actualFeeConfigHash ??
+              null,
+            profile: adjudication.fees.profileFile,
+            profileNote: adjudication.fees.profileNote,
+            queuePosition: adjudication.fees.queuePosition,
+          },
+          provenance: "LIVE",
+        }
+      : {
+          value: null,
+          provenance: "NOT_AVAILABLE",
+          note: adjudication.network
+            ? "No fee quote was recorded for this referral. Referrals submitted before Consensus v0.6, or on a gasless network, carry no deposit."
+            : "Nothing was submitted, so nothing was quoted.",
+        },
+    feeAccounting: adjudication.feeAccounting
+      ? {
+          value: {
+            deposit: formatGen(adjudication.feeAccounting.depositWei),
+            consumed: formatGen(adjudication.feeAccounting.consumedWei),
+            refunded: formatGen(adjudication.feeAccounting.refundedWei),
+            source: adjudication.feeAccounting.source,
+          },
+          provenance: "LIVE",
+        }
+      : {
+          value: null,
+          provenance: "NOT_AVAILABLE",
+          note: "The network has not reported fee consumption for this transaction. The deposit above is what was escrowed, not what was spent.",
         },
     votes: voteEntries
       ? { value: voteEntries, provenance: "LIVE" }

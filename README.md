@@ -31,21 +31,27 @@ five minutes.
 
 ```bash
 npm install
-npm run seed        # writes a ledger of real protocol runs (~40s, includes one live adjudication)
-npm run dev         # http://localhost:3000
+npm run genlayer:deploy   # deploy RecourseAdjudicator to Studio Next (writes the address)
+npm run seed              # ledger of real protocol runs (~40s, includes one live adjudication)
+npm run dev               # http://localhost:3000
 ```
+
+Creating a protected purchase works without the first step; **adjudication does
+not**. Until a contract is deployed for the selected network the app reports the
+forum as unavailable and says so on every surface, rather than showing a ruling
+that never happened.
 
 No wallet, no API key, no environment variables. Open `/demo` and press **Run protected
 purchase**. The dispute path takes about 30 seconds, most of it spent waiting for real GenLayer
 validators to rule.
 
 ```bash
-npm test               # 25 domain + adversarial tests, no network
+npm test               # 58 domain, adversarial, auth and Studio Next tests, no network
 npm run test:live      # opt-in: two real adjudications on-network (buyer wins, merchant wins)
 npm run wallet                          # create a deployment wallet for a public testnet
 npm run agents generate shopper.agent   # register an agent and print its key once
 npm run agents list                     # who is bound to which key
-npm run genlayer:deploy    # deploy RecourseAdjudicator to a GenLayer network
+npm run genlayer:deploy    # deploy to Studio Next: quotes the fee, tracks, records the address
 npm run genlayer:smoke     # one real adjudication against the deployed contract
 npm run seed:fast          # reseed without the network round trip
 ```
@@ -63,6 +69,7 @@ reason rather than filled in with something plausible.
 | State machine, agreements, verification, disputes, settlement | **Real** | Full domain implementation, persisted, 25 tests |
 | Agreement + evidence hashing | **Real** | Canonical JSON (RFC 8785 style) → sha256, recomputable by either party |
 | GenLayer adjudication | **Real** | `RecourseAdjudicator` Intelligent Contract deployed on GenLayer; real transactions, real validator consensus, real rulings |
+| Consensus v0.6 fees | **Real, and quoted** | Every write carries a fee distribution and its quoted value, produced by `@genlayer/transaction-kit` from a measured profile (when one is committed) plus the network's live prices — and submitted unchanged. A quote that disagrees with the live fee policy is refused, not signed. The deposit the protocol escrowed is recorded as a deposit; consumption and refund are shown only when a receipt reports them, otherwise `NOT AVAILABLE` |
 | Agent authentication | **Real cryptography** | Writes require a secp256k1 request signature. Handles are bound to keys in a persistent registry — pre-registered, or trust-on-first-use. Wrong party, forged, tampered, stale and replayed requests are all rejected |
 | x402 payment authorization | **Real cryptography** | EIP-712 signature over an EIP-3009 `TransferWithAuthorization`, verified by signer recovery; replay, tampering and expiry rejected. The v2 wire format is implemented directly against the spec with `viem` — there is no `@x402/*` SDK dependency, so read `integrations/x402/rail.ts` rather than trusting a package name |
 | x402 on-chain settlement | **Not performed** | Broadcasting needs a funded facilitator and a funded buyer wallet. Settlement is recorded as `SIGNATURE_VERIFIED_LOCAL_ESCROW` with a **null** transaction hash. No fake hashes anywhere |
@@ -205,9 +212,11 @@ Everything has a working default. Set these only to change where it points.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `GENLAYER_NETWORK` | `studionet` | `localnet` · `studionet` · `testnet-asimov` · `testnet-bradbury` |
-| `GENLAYER_CONTRACT_ADDRESS` | from `.recourse/genlayer.json` | Pin a deployed adjudicator |
-| `GENLAYER_PRIVATE_KEY` | ephemeral account | Required for faucet-funded testnets |
+| `GENLAYER_NETWORK` | `studio-next` | `studio-next` · `studio-dev` · `studionet` · `testnet-asimov` · `testnet-bradbury` · `localnet` |
+| `GENLAYER_CONTRACT_ADDRESS` | `genlayer.deployment.json`, then `.recourse/genlayer.json` | Pin a deployed adjudicator |
+| `GENLAYER_PRIVATE_KEY` | ephemeral account | Signer for adjudications, and the account that escrows the fee deposit |
+| `RECOURSE_FEE_PROFILE` | `./fee-profile.json` | Measured fee profile for the transaction kit. Ignored unless it declares the active `chainId` — with the reason shown in `/api/network` |
+| `RECOURSE_ALLOW_UNVERIFIED_FEES` | unset | Set to `1` to sign a quote that failed price verification. Off by default: a stale quote is refused |
 | `RECOURSE_RAIL` | `x402` | `x402` or `simulated` |
 | `X402_FACILITATOR_URL` | unset | Set to broadcast settlement for real |
 | `X402_NETWORK` / `X402_ASSET_ADDRESS` | Base Sepolia USDC | Payment network and asset |
@@ -217,15 +226,19 @@ Everything has a working default. Set these only to change where it points.
 | `RECOURSE_DEMO_ENDPOINTS` | `1` | Set to `0` to disable the keyless demo endpoints in production |
 | `RECOURSE_STORE_FILE` | `.recourse/ledger.json` | Ledger location |
 
-Studionet is the default because it is a real GenLayer network with real validators that needs
-no faucet — a judge can run the full adjudication path with nothing configured.
+**Studio Next** (Consensus v0.6, chain 61997) is the default because it is the network the
+hackathon requires. Its sandbox funds an account itself, so a fresh clone can run the full
+adjudication path — deploy, escrow a fee deposit, wait for real validators — without a faucet.
+Public testnets are supported for durable verification; stable Studionet remains available for
+Consensus v0.5 comparisons.
 
 ---
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript (strict) · Zod · Tailwind v4 · Lucide · genlayer-js · viem ·
-Python Intelligent Contract on GenLayer.
+Next.js 16 (App Router) · TypeScript (strict) · Zod · Tailwind v4 · Lucide · genlayer-js v2 (RC) ·
+@genlayer/transaction-kit (RC) · viem · Python Intelligent Contract on GenLayer Studio Next
+(Consensus v0.6).
 
 ---
 

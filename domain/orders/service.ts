@@ -50,6 +50,7 @@ import {
   type Actor,
 } from "../identity/authorization";
 import { fail } from "../shared/errors";
+import { formatGen } from "../shared/money";
 import type { MerchantAssertions } from "../model";
 
 export interface CreatePurchaseInput {
@@ -531,6 +532,8 @@ export class RecourseProtocol {
         failureReason: outcome.failureReason,
         submittedAt: this.clock.isoNow(),
         finalizedAt: outcome.finalizedAt,
+        fees: outcome.fees ?? null,
+        feeAccounting: outcome.feeAccounting ?? null,
       };
       await this.store.putAdjudication(adjudication);
 
@@ -539,11 +542,18 @@ export class RecourseProtocol {
           current,
           "ADJUDICATION_FAILED",
           outcome.failureReason ?? "Adjudication could not be submitted",
+          outcome.fees
+            ? { depositWei: outcome.fees.depositWei, feeSource: outcome.fees.source }
+            : undefined,
         );
       } else {
         await this.emit(current, "ADJUDICATION_SUBMITTED", "Dispute submitted to GenLayer", {
           transaction: outcome.transactionHash,
           contract: outcome.contractAddress,
+          // What the referral cost up front, and whether the network's live fee
+          // policy agreed with the quote that was signed.
+          deposit: outcome.fees ? formatGen(outcome.fees.depositWei) ?? outcome.fees.depositWei : "",
+          feePolicy: outcome.fees ? outcome.fees.verification.status : "",
         });
       }
 
@@ -581,6 +591,9 @@ export class RecourseProtocol {
         ruling: outcome.ruling,
         failureReason: outcome.failureReason,
         finalizedAt: outcome.finalizedAt,
+        // Fee consumption is read from the receipt on every poll, but only ever
+        // replaced when the node actually reported it.
+        feeAccounting: outcome.feeAccounting ?? adjudication.feeAccounting,
       };
       await this.store.putAdjudication(updated);
 

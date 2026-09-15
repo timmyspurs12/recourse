@@ -1,5 +1,7 @@
 import type {
   Adjudication,
+  AdjudicationFeeAccounting,
+  AdjudicationFeeQuote,
   Agreement,
   Delivery,
   Dispute,
@@ -126,6 +128,16 @@ export interface AdjudicationOutcome {
   ruling: Ruling | null;
   failureReason: string | null;
   finalizedAt: string | null;
+  /**
+   * Fee deposit quoted and submitted for this write, with the policy that
+   * produced it. Null when the network is gasless or the write never got as far
+   * as a quote.
+   */
+  fees?: AdjudicationFeeQuote | null;
+  /** Deposit consumption and refund, when a receipt reports them. */
+  feeAccounting?: AdjudicationFeeAccounting | null;
+  /** Pending-queue position while the transaction has not activated yet. */
+  queuePosition?: number | null;
 }
 
 export interface AdjudicationForum {
@@ -133,6 +145,8 @@ export interface AdjudicationForum {
   readonly available: boolean;
   /** Human description of what this forum actually is, shown in the UI. */
   readonly description: string;
+  /** Address the protocol signs adjudications with, when it has one. */
+  readonly signer?: string | null;
   /**
    * Broadcasts the adjudication. Returns as soon as the network accepts the
    * transaction — consensus takes tens of seconds and must not block a request.

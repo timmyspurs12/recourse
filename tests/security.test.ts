@@ -440,45 +440,158 @@ test("transient network failures are retried, not treated as a ruling failure", 
    * one-second hiccup turning into a permanent FAILED is a real harm.
    */
   const { GenLayerForum } = await import("../integrations/genlayer/forum");
+  const { loadGenLayerConfig } = await import("../integrations/genlayer/config");
 
-  let calls = 0;
-  const forum = new GenLayerForum({
-    networkKey: "testnet-bradbury",
-    chain: {} as never,
-    networkLabel: "TEST",
-    contractAddress: "0xtest",
-    privateKey: null,
-    deploymentFile: "",
-  });
+  let estimates = 0;
+  let submissions = 0;
 
-  // Fail twice with the exact error the live network produced, then succeed.
-  (forum as unknown as { getClient: () => unknown }).getClient = () => ({
-    writeContract: async () => {
-      calls += 1;
-      if (calls < 3) {
-        throw new Error(
-          "Request exceeds defined limit.\n\nDetails: transaction gas rate limit exceeded: node is at capacity, retry in ~981ms",
-        );
-      }
-      return "0xabc";
-    },
-  });
+  const forum = new GenLayerForum(
+    loadGenLayerConfig({
+      GENLAYER_NETWORK: "testnet-bradbury",
+      GENLAYER_CONTRACT_ADDRESS: "0x00000000000000000000000000000000000000aa",
+    }),
+    () => ({
+      signerAddress: "0x00000000000000000000000000000000000000bb",
+      profile: { suggestions: null, file: "fee-profile.json", note: "none", measuredAt: null },
+      kit: {
+        estimate: async () => {
+          estimates += 1;
+          if (estimates < 3) {
+            throw new Error(
+              "Request exceeds defined limit.\n\nDetails: transaction gas rate limit exceeded: node is at capacity, retry in ~981ms",
+            );
+          }
+          return quote();
+        },
+        submit: async () => {
+          submissions += 1;
+          return { genlayerTxId: "0xabc" as const };
+        },
+      },
+    }) as never,
+  );
 
-  const outcome = await forum.submit({
+  const outcome = await forum.submit(adjudicationRequest());
+
+  assert.equal(estimates, 3, "should have retried twice before the quote succeeded");
+  assert.equal(submissions, 1, "exactly one submission");
+  assert.equal(outcome.status, "SUBMITTED");
+  assert.equal(outcome.transactionHash, "0xabc");
+  assert.equal(outcome.fees?.depositWei, "420000000000000", "the quoted deposit is recorded");
+  assert.equal(outcome.fees?.verification.status, "verified");
+});
+
+test("a fee quote that disagrees with live network prices is never signed", async () => {
+  /*
+   * Consensus v0.6 price protection. A quote built against stale prices is
+   * cancelled at activation if the price moved the wrong way, so signing it
+   * would burn the submission and leave the escrow held with no ruling. Refuse
+   * instead: the operator can retry, and the retry quotes afresh.
+   */
+  const { GenLayerForum } = await import("../integrations/genlayer/forum");
+  const { loadGenLayerConfig } = await import("../integrations/genlayer/config");
+
+  let submissions = 0;
+  const forum = new GenLayerForum(
+    loadGenLayerConfig({
+      GENLAYER_NETWORK: "studio-next",
+      GENLAYER_CONTRACT_ADDRESS: "0x00000000000000000000000000000000000000aa",
+    }),
+    () => ({
+      signerAddress: "0x00000000000000000000000000000000000000bb",
+      profile: { suggestions: null, file: "fee-profile.json", note: "none", measuredAt: null },
+      kit: {
+        estimate: async () => quote({ status: "mismatch", actualHash: "0xdead" }),
+        submit: async () => {
+          submissions += 1;
+          return { genlayerTxId: "0xabc" as const };
+        },
+      },
+    }) as never,
+  );
+
+  const outcome = await forum.submit(adjudicationRequest());
+
+  assert.equal(submissions, 0, "nothing may be broadcast on an unverified quote");
+  assert.equal(outcome.status, "FAILED");
+  assert.match(outcome.failureReason ?? "", /does not match/);
+  assert.equal(outcome.fees?.verification.actualFeeConfigHash, "0xdead");
+});
+
+test("a forum that cannot quote a fee submits nothing at all", async () => {
+  /*
+   * The alternative — submitting without a fee distribution — is worse than
+   * failing: the network rejects it, and in the meantime the dispute looks like
+   * it is in progress.
+   */
+  const { GenLayerForum } = await import("../integrations/genlayer/forum");
+  const { loadGenLayerConfig } = await import("../integrations/genlayer/config");
+
+  let submissions = 0;
+  const forum = new GenLayerForum(
+    loadGenLayerConfig({
+      GENLAYER_NETWORK: "studio-next",
+      GENLAYER_CONTRACT_ADDRESS: "0x00000000000000000000000000000000000000aa",
+    }),
+    () => ({
+      signerAddress: "0x00000000000000000000000000000000000000bb",
+      profile: { suggestions: null, file: "fee-profile.json", note: "none", measuredAt: null },
+      kit: {
+        estimate: async () => {
+          throw new Error("insufficient funds for fee deposit");
+        },
+        submit: async () => {
+          submissions += 1;
+          return { genlayerTxId: "0xabc" as const };
+        },
+      },
+    }) as never,
+  );
+
+  const outcome = await forum.submit(adjudicationRequest());
+
+  assert.equal(submissions, 0);
+  assert.equal(outcome.status, "FAILED");
+  assert.match(outcome.failureReason ?? "", /insufficient funds/);
+  assert.match(outcome.failureReason ?? "", /escrow is still held/);
+});
+
+/* ------------------------------------------------------------------ helpers */
+
+function adjudicationRequest() {
+  return {
     disputeId: "dsp_retry",
     orderId: "RC-000001",
     question: "q",
     payload: {
       agreementHash: "0x1",
       evidenceHash: "0x2",
-      contestedTerms: [{ id: "t", label: "T", operator: "GTE", expected: "5", mandatory: true }],
+      contestedTerms: [
+        { id: "t", label: "T", operator: "GTE", expected: "5", mandatory: true },
+      ],
       deterministicFindings: [],
       merchantStatement: "m",
       buyerClaim: "b",
     },
-  });
+  };
+}
 
-  assert.equal(calls, 3, "should have retried twice before succeeding");
-  assert.equal(outcome.status, "SUBMITTED");
-  assert.equal(outcome.transactionHash, "0xabc");
-});
+function quote(verification: { status: "verified" | "mismatch" | "unavailable"; actualHash?: string } = {
+  status: "verified",
+}) {
+  return {
+    distribution: {},
+    feeValue: 420000000000000n,
+    userValue: 0n,
+    total: 420000000000000n,
+    source: "network-default" as const,
+    verification: {
+      status: verification.status,
+      expectedHash: "0xbeef" as const,
+      ...(verification.actualHash ? { actualHash: verification.actualHash as `0x${string}` } : {}),
+    },
+    breakdown: { timeUnitFees: 400000000000000n, executionBudget: 20000000000000n, messageFees: 0n },
+    caps: { genPerTimeUnit: 1n, storagePrice: 1n, receiptPrice: 1n },
+    refundable: true as const,
+  };
+}

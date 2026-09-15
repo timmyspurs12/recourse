@@ -35,7 +35,9 @@ mid-demo. Use a container host with a volume — or implement the Postgres adapt
    > If you previously set `RAILWAY_RUN_UID`, remove it after deploying this version.
 4. **Variables** (Settings → Variables):
    ```
-   GENLAYER_NETWORK=studionet
+   GENLAYER_NETWORK=studio-next
+   GENLAYER_CONTRACT_ADDRESS=0x…        # from `npm run genlayer:deploy`
+   GENLAYER_PRIVATE_KEY=0x…             # pays the fee deposit for each ruling
    RECOURSE_REQUIRE_AUTH=1
    RECOURSE_STORE_FILE=/app/.recourse/ledger.json
    ```
@@ -71,17 +73,59 @@ docker run -d -p 80:3000 -v recourse-data:/app/.recourse \
 
 ---
 
-## Going from Studionet to a public testnet
+## The network: Studio Next
 
-Studionet is a **hosted development sandbox**: free, auto-funded, no wallet needed — but it is a
-dev environment, and contracts there can be reaped. For a submission that has to stay verifiable
-for weeks, deploy to a public testnet with a real explorer.
+The hackathon requires the deployment to run on **Studio Next** — Consensus v0.6,
+chain id **61997**, RPC `https://studio-next.genlayer.com/api`, explorer
+`https://explorer-studio-dev.genlayer.com/`. That is the default here.
 
-| Network | Explorer | Fees | Use when |
+| Network | Chain | Fees | Use when |
 | --- | --- | --- | --- |
-| `studionet` | `studio.genlayer.com` (Studio UI) | none | development, and as a fallback |
-| `testnet-bradbury` | `explorer-bradbury.genlayer.com` | GEN | **persistent, production-like — recommended** |
-| `testnet-asimov` | `explorer-asimov.genlayer.com` | GEN | infrastructure / stress testing |
+| `studio-next` | 61997 | quoted per write | **the submission** — the required network |
+| `studio-dev` | 61997 | quoted per write | the RC preview at the older hostname, same chain |
+| `testnet-bradbury` | 4221 | GEN | durable, production-like verification with a public explorer |
+| `studionet` | 61999 | gasless | the previous stable Studio (Consensus v0.5) |
+| `localnet` | — | gasless | a local GenLayer node |
+
+### Fees, honestly
+
+On v0.6 a deploy and a write are not free by default: each reserves a **fee
+deposit** against the network's published price ceilings, and unused budget is
+refunded at finalization. Recourse does not compute that number itself:
+
+1. the quote comes from an optional measured `fee-profile.json`, priced at quote
+   time by the network (`@genlayer/transaction-kit` does the work);
+2. the app submits the returned distribution and fee value **unchanged**;
+3. if the quote disagrees with the network's live fee policy, nothing is signed.
+   The referral fails with the reason, and the escrow stays held while the
+   operator retries — which is strictly better than a transaction that is
+   cancelled at activation.
+
+A deposit is not a price. The UI shows the deposit, and consumption and refund
+separately, and prints "not reported" rather than inferring one from the other.
+
+**Who pays.** Adjudication is submitted by the protocol, not by a user, so the
+signer is the deployment's key: `GENLAYER_PRIVATE_KEY`. On Studio the sandbox can
+fund an account itself, so an unfunded key is topped up automatically
+(`sim_fundAccount`) when the balance is below the quoted deposit. On a public
+testnet there is no such facility and the key must be funded from the faucet.
+
+### Measuring a fee profile (optional, recommended for a final submission)
+
+A profile makes the deposit reflect what *this* contract actually costs instead
+of the network's default allocations:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt                     # genlayer-test / gtest
+gltest tests/ --network studio-next --fee-profile fee-profile.json
+```
+
+Commit the result as `fee-profile.json` at the repo root. It must declare
+`chainId: 61997`; a profile measured on another chain is **ignored**, with the
+reason shown in `/api/network` and on the referral panel. If no profile is
+present the app runs on network-default allocations inside live price caps, and
+says so — that is a supported path, not a degraded one.
 
 ### Steps
 
@@ -90,41 +134,40 @@ for weeks, deploy to a public testnet with a real explorer.
 #    so every npm script fails with MODULE_NOT_FOUND until this is done.
 npm install
 
-# 1. Create a deployment wallet (prints the key ONCE — save it)
-npm run wallet
+# 1. Deploy to Studio Next (no faucet needed: the sandbox funds the account).
+npm run genlayer:deploy
 
-# 2. Fund the address at https://testnet-faucet.genlayer.foundation/
-#    A deployment costs roughly 0.0018 GEN, so one drip goes a long way.
-
-# 3. Deploy. The script refuses to start on an unfunded wallet and tells you why.
-npm run genlayer:deploy -- --network testnet-bradbury --key 0xYOUR_KEY
+#    Or on a public testnet, with a funded key:
+#      npm run wallet                       # prints a key once — save it
+#      # fund the address at https://testnet-faucet.genlayer.foundation/
+#      npm run genlayer:deploy -- --network testnet-bradbury --key 0xYOUR_KEY
 ```
 
-The flags work in every shell. If you are in bash and prefer environment
-variables, `GENLAYER_NETWORK=... GENLAYER_PRIVATE_KEY=... npm run genlayer:deploy`
-does the same thing — but that syntax fails in PowerShell and cmd.
-
-It prints the explorer link to paste into the submission form and updates
-`genlayer.deployment.json` so a fresh clone points at the same contract.
+The script quotes the deploy fee, refuses to sign a quote that disagrees with the
+network's live policy, deploys, tracks to finalization, and writes both
+`.recourse/genlayer.json` (this machine) and `genlayer.deployment.json` (the
+committed default, merged per network). It prints the explorer link for the
+submission form.
 
 ### Then point the live app at it
 
 In Railway → Variables:
 
 ```
-GENLAYER_NETWORK=testnet-bradbury
+GENLAYER_NETWORK=studio-next
 GENLAYER_PRIVATE_KEY=0xYOUR_KEY
 GENLAYER_CONTRACT_ADDRESS=0xYOUR_CONTRACT
 ```
 
-> **Every adjudication now costs GEN from that wallet.** Each demo run a judge triggers spends a
-> fee. Adjudication is rate limited to 10/min, but keep an eye on the balance during judging — and
-> know that if it empties, the forum reports `FAILED` and the escrow stays held rather than
-> producing a wrong outcome. Top up from the faucet if needed.
+> **Each adjudication escrows a fee deposit from that wallet.** Adjudication is
+> rate limited to 10/min, and unused budget is refunded at finalization, so a
+> demo run costs far less than the deposit. Watch the balance during judging: if
+> the key empties, the forum reports `FAILED` with the reason and the escrow
+> stays held rather than producing a wrong outcome.
 
-If you would rather not manage a balance during judging, keep the deployed app on `studionet` and
-submit the Bradbury contract link alongside it — but say plainly in the how-to which network the
-running demo uses, because the panel will check.
+`npm run genlayer:smoke` runs one real adjudication — including a
+prompt-injection payload — against the contract and prints the votes, the
+execution result and the ruling. Run it after deploying, before submitting.
 
 ---
 
@@ -154,31 +197,37 @@ the panel reviews it directly.
 
 ```bash
 npm install
-npm run seed        # ~40s, includes one live GenLayer adjudication
-npm test            # 39 passing
+npm run seed        # ~40s, includes one live adjudication (network + fee deposit)
+npm test            # 58 passing
 npm run build       # clean
 ```
 
 Then on the deployed URL:
 
-- `/` loads and the header shows `GENLAYER STUDIONET`.
-- `/demo` → "Promise breached" → completes in ~30s and ends `REFUNDED`.
-- `/demo` → "Promise satisfied" → completes in ~2s and ends `RELEASED`.
+- `/` loads and the header shows `GENLAYER STUDIO NEXT` with chain id 61997.
+- `/demo` → "Promise breached" → completes and ends `REFUNDED`; the referral
+  panel shows the fee deposit and the policy as `verified`.
+- `/demo` → "Promise satisfied" → ends `RELEASED` with no adjudication at all.
 - `/disputes/dsp_rc-000042` shows a real transaction hash and real validator votes.
-- `GET /api/network` reports `"available": true` for adjudication.
+- `GET /api/network` reports `"available": true`, `"chainId": 61997`, and a
+  `fees` block.
 
-If adjudication reports unavailable, studionet has reaped the contract. Redeploy and update
-`genlayer.deployment.json`:
+If adjudication reports unavailable, no address is configured for the selected
+network — deploy (or set `GENLAYER_CONTRACT_ADDRESS`):
 
 ```bash
 npm run genlayer:deploy
 ```
 
----
+> **Building offline?** `next build` fetches Geist from Google Fonts at build
+> time. With no internet the build fails at that step with a message naming the
+> font; that is the sandbox, not the app. Build somewhere with egress, or
+> self-host the font with `next/font/local`.
 
 ## Production hardening (worth doing if the URL will be public for two weeks)
 
 ```
+GENLAYER_NETWORK=studio-next  # the network the hackathon requires
 RECOURSE_DEMO_ENDPOINTS=1     # keep ON for judges — it is the keyless demo path
 RECOURSE_REQUIRE_AUTH=1       # writes need signed agent requests (default)
 RECOURSE_STRICT_REGISTRY=0    # keep 0 so integrators can self-bind via TOFU

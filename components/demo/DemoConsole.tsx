@@ -268,6 +268,15 @@ export function DemoConsole({
             {forumDescription} The dispute path will stop at ADJUDICATING and the escrow will stay
             held — which is exactly what the protocol should do when no forum can rule.
           </p>
+          <p className="mt-2 text-sm text-fg-muted">
+            To enable judgment, deploy the contract to Studio Next and restart with the address it
+            prints:
+          </p>
+          <pre className="mt-2 overflow-x-auto border border-line bg-surface px-3 py-2 font-mono text-[11px] text-fg-muted">
+{`npm run genlayer:deploy
+# then set GENLAYER_NETWORK=studio-next
+# and      GENLAYER_CONTRACT_ADDRESS=0x…`}
+          </pre>
         </div>
       ) : null}
 
