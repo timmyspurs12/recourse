@@ -11,8 +11,8 @@
     "seed:fast": "tsx server/seed.ts --fast",
     "test": "tsx --test tests/lifecycle.test.ts tests/security.test.ts tests/auth.test.ts tests/genlayer.test.ts",
     "test:live": "RECOURSE_LIVE=1 tsx --test --test-timeout=600000 tests/genlayer.live.test.ts",
-    "genlayer:deploy": "tsx scripts/genlayer-deploy.ts",
-    "genlayer:smoke": "tsx scripts/genlayer-smoke.ts",
+    "genlayer:deploy": "tsx scripts/genlayer-deploy.mts",
+    "genlayer:smoke": "tsx scripts/genlayer-smoke.mts",
     "agents": "tsx server/agents.ts",
     "agents:register": "tsx server/agents.ts register",
     "wallet": "node scripts/new-wallet.mjs"
