@@ -38,7 +38,7 @@ export type NetworkKey =
   | "testnet-bradbury";
 
 /** Studio Next's canonical JSON-RPC endpoint, as published in the hackathon brief. */
-export const STUDIO_NEXT_RPC_URL = "https://studio-next.genlayer.com/api";
+export const STUDIO_NEXT_RPC_URL = "https://studio-dev.genlayer.com/api";
 export const STUDIO_NEXT_CHAIN_ID = 61997;
 
 export interface NetworkDefinition {
