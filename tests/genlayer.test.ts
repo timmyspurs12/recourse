@@ -1,11 +1,12 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { parseTransaction, recoverTransactionAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
+  ADJUDICATOR_SOURCE,
   DEFAULT_NETWORK,
   STUDIO_NEXT_CHAIN_ID,
   STUDIO_NEXT_RPC_URL,
@@ -16,6 +17,13 @@ import {
 import { extractFeeAccounting, formatGen, quoteToDomain, resolveFeeProfile } from "../integrations/genlayer/fees";
 import { createSigningProvider } from "../integrations/genlayer/provider";
 import { parseRuling } from "../integrations/genlayer/forum";
+import {
+  STUDIO_NEXT_PY_GENLAYER_PIN,
+  checkRunnerPin,
+  decodeGvm32,
+  runnerPinProblems,
+  runnerPinsInHeader,
+} from "../integrations/genlayer/runner-pin";
 
 /**
  * STUDIO NEXT TESTS.
@@ -332,4 +340,67 @@ test("a ruling that is internally coherent but wrong is still rejected", () => {
     ),
     null,
   );
+});
+
+/* ------------------------------------------------------------ runner pins */
+
+test("the deployed contract pins the runner Studio Next ships", () => {
+  /*
+   * The runner pin is the contract's execution environment: GenVM loads
+   * `py-genlayer:<hash>` out of the network's runner cache before the
+   * contract's first line runs. A pin the network cannot decode does not raise
+   * inside the contract — it aborts the deployment before startup, so nothing
+   * in the contract can catch it and the receipt shows only
+   * `invalid_contract ... malformed_runner`.
+   */
+  const source = readFileSync(ADJUDICATOR_SOURCE, "utf-8");
+  assert.deepEqual(runnerPinsInHeader(source), [STUDIO_NEXT_PY_GENLAYER_PIN]);
+  assert.deepEqual(runnerPinProblems(source), []);
+});
+
+test("a pin whose trailing padding bits carry data is refused", () => {
+  // This hash appears in older GenLayer documentation. It is 52 characters of
+  // valid base32 and still unusable: the final character's four padding bits
+  // are non-zero, and GenVM's gvm32 decoder rejects non-canonical encodings.
+  const legacy = "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6";
+  const problem = checkRunnerPin(legacy);
+  assert.ok(problem?.includes("gvm32"), problem ?? "no problem reported");
+
+  // The same bytes, canonicalised: the trailing character is zeroed, not the
+  // value re-hashed.
+  assert.equal(decodeGvm32(legacy.slice("py-genlayer:".length)), null);
+  assert.equal(decodeGvm32(STUDIO_NEXT_PY_GENLAYER_PIN.slice("py-genlayer:".length))?.length, 32);
+});
+
+test("runner pin checks mirror GenVM's own resolution rules", () => {
+  assert.equal(checkRunnerPin(STUDIO_NEXT_PY_GENLAYER_PIN), null);
+  assert.match(checkRunnerPin("py-genlayer:latest") ?? "", /debug mode/);
+  assert.match(checkRunnerPin("py-genlayer:!!!") ?? "", /does not accept/);
+  // 52 characters, valid base32, but the last character carries data bits.
+  assert.match(checkRunnerPin(`py-genlayer:${"0".repeat(51)}6`) ?? "", /canonical gvm32/);
+  assert.match(checkRunnerPin("py-genlayer") ?? "", /<name>:<hash>/);
+});
+
+test("every Depends in the header is checked, including Seq blocks", () => {
+  const source = [
+    "# v0.3.0",
+    "# {",
+    '#   "Seq": [',
+    '#     { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" },',
+    `#     { "Depends": "${STUDIO_NEXT_PY_GENLAYER_PIN}" }`,
+    "#   ]",
+    "# }",
+    "",
+    "import genlayer as gl",
+  ].join("\n");
+
+  const problems = runnerPinProblems(source);
+  assert.equal(problems.length, 1);
+  assert.ok(problems[0].startsWith('runner "py-genlayer:1jb45aa8'), problems[0]);
+});
+
+test("a contract with no runner header is refused before it is sent", () => {
+  const problems = runnerPinProblems("import genlayer as gl\n");
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /declares no runner/);
 });

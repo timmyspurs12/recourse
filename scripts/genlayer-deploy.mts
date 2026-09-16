@@ -30,6 +30,11 @@ import { generatePrivateKey } from "viem/accounts";
 import { loadGenLayerConfig } from "../integrations/genlayer/config";
 import { createForumKit, formatGen } from "../integrations/genlayer/fees";
 import { ADJUDICATOR_SOURCE } from "../integrations/genlayer/config";
+import {
+  STUDIO_NEXT_PY_GENLAYER_PIN,
+  runnerPinProblems,
+  runnerPinsInHeader,
+} from "../integrations/genlayer/runner-pin";
 
 /*
  * Flags as well as environment variables.
@@ -85,6 +90,40 @@ console.log(`deployer: ${account.address}`);
 console.log(`contract: ${ADJUDICATOR_SOURCE}`);
 for (const warning of config.warnings) console.log(`warning:  ${warning}`);
 
+/* ------------------------------------------------------------ runner pin */
+
+/*
+ * The runner pin is checked before anything is sent: a pin the network cannot
+ * decode aborts the deployment after consensus, when the only evidence left is
+ * `invalid_contract ... malformed_runner` on a finalized transaction with no
+ * traceback and nothing deployed. Checking it here costs nothing and names the
+ * offending character.
+ */
+const code = readFileSync(ADJUDICATOR_SOURCE, "utf-8");
+const pinProblems = runnerPinProblems(code);
+if (pinProblems.length > 0) {
+  console.error("\nThe contract's runner pin cannot be loaded by GenVM:");
+  for (const problem of pinProblems) console.error(`  ${problem}`);
+  console.error(
+    "\nThe pin is the first comment in the contract, e.g." +
+      `\n  # { "Depends": "${STUDIO_NEXT_PY_GENLAYER_PIN}" }`,
+  );
+  console.error("Nothing was sent to the network.");
+  process.exit(1);
+}
+
+const pins = runnerPinsInHeader(code);
+for (const pin of pins) console.log(`runner:   ${pin}`);
+if (
+  config.networkKey === "studio-next" &&
+  pins.length === 1 &&
+  pins[0] !== STUDIO_NEXT_PY_GENLAYER_PIN
+) {
+  console.log(
+    `warning:  Studio Next ships ${STUDIO_NEXT_PY_GENLAYER_PIN}; this contract pins ${pins[0]}`,
+  );
+}
+
 const client = createClient({ chain: config.chain, account });
 
 /* ------------------------------------------------------------------ funding */
@@ -121,7 +160,6 @@ try {
 
 /* -------------------------------------------------------------------- deploy */
 
-const code = readFileSync(ADJUDICATOR_SOURCE, "utf-8");
 const { kit, profile } = createForumKit(config, privateKey, {
   allowUnverified: process.env.RECOURSE_ALLOW_UNVERIFIED_FEES === "1",
 });
@@ -163,18 +201,58 @@ const tracked = await kit.track(genlayerTxId, (status) => {
  * and the receipt is the source of truth if it disagrees.
  */
 const receipt = await client.getTransaction({ hash: genlayerTxId as unknown as Hash });
+const receiptShape = receipt as {
+  txDataDecoded?: { contractAddress?: string };
+  data?: { contract_address?: string };
+  txExecutionResultName?: string;
+  txExecutionResult?: number;
+  consensus_data?: { leader_receipt?: Array<{ genvm_result?: { stderr?: string } }> };
+};
 const address =
-  tracked.contractAddress ??
-  (receipt as { txDataDecoded?: { contractAddress?: string } }).txDataDecoded?.contractAddress ??
-  (receipt as { data?: { contract_address?: string } }).data?.contract_address ??
+  tracked.contractAddress ?? receiptShape.txDataDecoded?.contractAddress ?? receiptShape.data?.contract_address ?? null;
+
+/*
+ * FINALIZED says the network decided. It does not say the contract ran, and a
+ * deployment whose execution errored still carries a contract address in its
+ * receipt — an address with no code behind it. Recording it would report a
+ * contract that does not exist, which is worse than reporting no deployment, so
+ * the execution result is checked before any file is written.
+ */
+const EXECUTION_RESULT_NUMBER_TO_NAME: Record<number, string> = {
+  0: "NOT_VOTED",
+  1: "FINISHED_WITH_RETURN",
+  2: "FINISHED_WITH_ERROR",
+  3: "TIMEOUT",
+  4: "NONDET_DISAGREE",
+};
+const execution =
+  tracked.executionResultName ??
+  receiptShape.txExecutionResultName ??
+  (receiptShape.txExecutionResult !== undefined
+    ? EXECUTION_RESULT_NUMBER_TO_NAME[receiptShape.txExecutionResult]
+    : undefined) ??
   null;
 
+if (execution !== "FINISHED_WITH_RETURN") {
+  console.error(`\nThe deployment did not run: execution was ${execution ?? "not reported"}.`);
+  console.error(`  status:    ${tracked.statusName ?? tracked.phase ?? "not reported"}`);
+  console.error(`  execution: ${execution ?? "not reported"}`);
+  console.error(`  tx:        ${genlayerTxId}`);
+  if (address) {
+    console.error(
+      `  address:   ${address} (reported by the receipt, but no code was stored — not usable)`,
+    );
+  }
+  const stderr = receiptShape.consensus_data?.leader_receipt?.[0]?.genvm_result?.stderr;
+  if (stderr) console.error(stderr.slice(0, 4000));
+  console.error("\nNothing was written to the deployment files. Re-run when the contract executes.");
+  process.exit(1);
+}
+
 if (!address) {
-  console.error("\nThe deployment was tracked but no contract address was reported.");
-  console.error(`execution: ${tracked.executionResultName ?? "not reported"}`);
-  const stderr = (
-    receipt as { consensus_data?: { leader_receipt?: Array<{ genvm_result?: { stderr?: string } }> } }
-  ).consensus_data?.leader_receipt?.[0]?.genvm_result?.stderr;
+  console.error("\nThe deployment ran but no contract address was reported.");
+  console.error(`execution: ${execution}`);
+  const stderr = receiptShape.consensus_data?.leader_receipt?.[0]?.genvm_result?.stderr;
   if (stderr) console.error(stderr.slice(0, 4000));
   console.error("\nNothing was written to the deployment files. Re-run when the network is healthy.");
   process.exit(1);
