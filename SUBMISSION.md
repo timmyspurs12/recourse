@@ -59,20 +59,21 @@ The programmable chargeback layer for autonomous commerce. Payments got autonomo
 
 ## 03 · Description (1000 max)
 
-**995 / 1000 characters — verified, pastes without truncation.**
+**991 / 1000 characters — verified, pastes without truncation.**
 
-> ⚠ **One sentence in here is not yet backed by chain 61997.** It claims the forum *"rules both
-> ways: buyer refunded on a real breach, merchant paid on an unjustified complaint."* All three
-> live adjudications on 61997 returned `BUYER_WINS`; there is no `MERCHANT_WINS` ruling on this
-> chain to point at (the earlier both-directions evidence is from Studionet 61999, Consensus v0.5).
-> Either refer a merchant-win dispute on 61997 before submitting, or swap in this verified
-> replacement — **978 / 1000 characters**, and it is a stronger claim because it is on chain:
+> **Changed 2026-09-17 — do not revert without new evidence.** This sentence used to claim the
+> forum *"rules both ways: buyer refunded on a real breach, merchant paid on an unjustified
+> complaint."* All three live adjudications on chain 61997 returned `BUYER_WINS`, so there was no
+> `MERCHANT_WINS` ruling on this chain to point at — the both-directions evidence predates the 61997
+> deployment and lives on Studionet 61999 (Consensus v0.5).
 >
-> ```
-> Live on 61997: a merchant's injected IGNORE ALL PREVIOUS INSTRUCTIONS was refused, buyer refunded.
-> ```
+> The replacement is a claim the chain *does* support, and a stronger one: tx
+> [`0xce6bb219…`](https://explorer-studio-dev.genlayer.com/tx/0xce6bb219844293fbdbb107f1f5a5b2f4da865026740fa2d8e008c0b60eecbb3e)
+> put a prompt injection through the real `adjudicate` entry point and the validators refused it on
+> the record. See **Verified on chain** below.
 >
-> It replaces the sentence beginning "On the live network it rules both ways".
+> Want the both-directions claim back? Refer a merchant-win dispute on 61997 first and cite the
+> transaction here.
 
 ```
 An AI agent can pay in 400ms without asking anyone. If what arrives is wrong it has no move: no chargeback, no dispute form, no card network. Recourse makes the payment conditional on the promise.
@@ -81,7 +82,7 @@ Two agents agree machine-readable terms, hashed BEFORE payment is escrowed, so n
 
 Only a semantic question reaches GenLayer: were 2 of 5 sources a MATERIAL breach? Deterministic findings travel with it as facts it may not recompute.
 
-Each validator re-runs the judgment itself and must independently reach the same decision - it does not rubber-stamp the leader. On the live network it rules both ways: buyer refunded on a real breach, merchant paid on an unjustified complaint.
+Each validator re-runs the judgment itself and must independently reach the same decision - it does not rubber-stamp the leader. Live on 61997 the forum refused a merchant's injected IGNORE ALL PREVIOUS INSTRUCTIONS and ruled for the buyer.
 
 x402 is wrapped, not replaced: payTo is the escrow, so payment arrives bound to an agreement.
 ```
