@@ -6,7 +6,7 @@
  * the network has loaded the runtime that executes it:
  *
  *   # v0.3.0
- *   # { "Depends": "py-genlayer:9b8kjyda2ycxyq4ea6g4yfpnydxhd52gqba5rb8dw7krkh5mn9p0" }
+ *   # { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
  *
  * GenVM identifies a runner by content hash, encoded as Crockford Base32
  * ("gvm32": alphabet `0123456789abcdefghjkmnpqrstvwxyz`, no padding, i/l read
@@ -32,7 +32,7 @@ const GVM32_LENGTH = 52;
 
 /** The py-genlayer runner shipped by Studio Next (Consensus v0.6, chain 61997). */
 export const STUDIO_NEXT_PY_GENLAYER_PIN =
-  "py-genlayer:9b8kjyda2ycxyq4ea6g4yfpnydxhd52gqba5rb8dw7krkh5mn9p0";
+  "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng";
 
 /**
  * Decodes a gvm32 string, or returns null when it is not a canonical encoding.

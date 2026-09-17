@@ -1,15 +1,14 @@
 {
-  "note": "Recorded RecourseAdjudicator deployments, one per network. Studio Next is the hackathon network and the default: run `npm run genlayer:deploy` to fill in its address. Override any of these with GENLAYER_CONTRACT_ADDRESS.",
+  "note": "Default RecourseAdjudicator deployments, one per network. Override with GENLAYER_CONTRACT_ADDRESS, or redeploy with `npm run genlayer:deploy`.",
   "default": "studio-next",
   "deployments": {
     "studio-next": {
-      "address": null,
+      "address": "0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56",
       "chainId": 61997,
-      "rpcUrl": "https://studio-next.genlayer.com/api",
-      "explorer": null,
-      "deployedAt": null,
-      "deployTx": null,
-      "status": "not deployed yet — `npm run genlayer:deploy` writes this entry"
+      "rpcUrl": "https://studio-dev.genlayer.com/api",
+      "deployedAt": "2026-09-17T08:24:02.457Z",
+      "deployTx": "0x69e1be16eb0cd40e3cc029d5938ca3d20ae78dac492445617a71150a15f86a7f",
+      "explorer": "https://explorer-studio-dev.genlayer.com/address/0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56"
     },
     "studionet": {
       "address": "0xB33ebE4c93304098B7ae1c50686dC6C4A17B8e0c",
