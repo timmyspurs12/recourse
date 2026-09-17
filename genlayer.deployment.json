@@ -8,7 +8,9 @@
       "rpcUrl": "https://studio-dev.genlayer.com/api",
       "deployedAt": "2026-09-17T08:24:02.457Z",
       "deployTx": "0x69e1be16eb0cd40e3cc029d5938ca3d20ae78dac492445617a71150a15f86a7f",
-      "explorer": "https://explorer-studio-dev.genlayer.com/address/0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56"
+      "explorer": "https://explorer-studio-dev.genlayer.com/address/0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56",
+      "deployer": "0x6441F8f71Df66bEa440bc00859231f2ff80e9487",
+      "status": "FINALIZED, consensus Accepted, execution FINISHED_WITH_RETURN — runner py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng (GenVM v0.6.0-rc3)"
     },
     "studionet": {
       "address": "0xB33ebE4c93304098B7ae1c50686dC6C4A17B8e0c",
