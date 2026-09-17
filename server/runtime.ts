@@ -44,6 +44,13 @@ export interface RuntimeInfo {
     signer: string | null;
     description: string;
     /**
+     * Anything the runtime had to decide on the operator's behalf — no signing
+     * key on a network that charges fees, an RPC override, an unknown network
+     * name. `config.ts` collects these and documents that they are reported
+     * here rather than swallowed; this is that report.
+     */
+    warnings: string[];
+    /**
      * Consensus v0.6 facts a reviewer can check without running anything: does
      * this network price deploy/write, and is a measured fee profile in use?
      */
@@ -132,6 +139,7 @@ export function getRuntime(): Runtime {
       contractAddress: genlayer.contractAddress,
       signer: (forum as { signer?: string | null }).signer ?? null,
       description: forum.description,
+      warnings: [...genlayer.warnings],
       fees: {
         networkCanCharge: genlayer.feeBearing,
         feeProfileFile: genlayer.feeProfileFile,

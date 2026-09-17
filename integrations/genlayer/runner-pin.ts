@@ -16,12 +16,23 @@
  * the network reads it. That rejection happens before a single line of the
  * contract runs, so the deployment finalizes with an execution error, zero gas
  * used, no state hash and no Python traceback — reported only as
- * `invalid_contract ... malformed_runner`.
+ * `invalid_contract runner malformed`.
  *
  * A pin can also be well-formed and still unusable: `:test`/`:latest` resolve
  * only in debug mode, and a hash for a runner the network does not ship fails
  * at load time. Both are checked here so that the failure lands on the terminal
  * running the deploy, not on the chain.
+ *
+ * The second case is the one that cannot be caught locally, and it is not
+ * hypothetical. GenVM repackages the python runner between releases, so the
+ * hash changes without the contract changing: Studio Next moved from
+ * `9b8kjyda…` (GenVM v0.6.0-rc1/rc2) to `5jycge4q…` (v0.6.0-rc3, shipped by
+ * Studio v0.123.0-rc.5+). A contract pinning the superseded hash is
+ * byte-for-byte valid, decodes cleanly, and still finalizes with
+ * `invalid_contract runner malformed` and nothing stored — the same symptom as
+ * a malformed pin, from a completely different cause. Only the network can
+ * answer whether it has the runner, so `scripts/genlayer-deploy.mts` asks it
+ * (`getContractSchemaForCode`) before paying a fee to find out.
  */
 
 /** Crockford Base32, as GenVM encodes hashes (`gvm32`). */
@@ -30,7 +41,18 @@ const GVM32_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 /** The hash GenVM expects: base32 characters, base32 length is 52 for 32 bytes. */
 const GVM32_LENGTH = 52;
 
-/** The py-genlayer runner shipped by Studio Next (Consensus v0.6, chain 61997). */
+/**
+ * The py-genlayer runner shipped by Studio Next (Consensus v0.6, chain 61997).
+ *
+ * GenVM v0.6.0-rc3, as shipped by Studio v0.123.0-rc.5 and later. Supersedes
+ * `9b8kjyda2ycxyq4ea6g4yfpnydxhd52gqba5rb8dw7krkh5mn9p0` (v0.6.0-rc1/rc2),
+ * which the 61997 fleet no longer carries and now rejects at load time.
+ *
+ * This value tracks the network, not the contract: it changes when the fleet's
+ * GenVM release changes, and a stale one fails with no local symptom at all.
+ * Confirm it against the release the target network is actually running before
+ * trusting a deployment to it.
+ */
 export const STUDIO_NEXT_PY_GENLAYER_PIN =
   "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng";
 

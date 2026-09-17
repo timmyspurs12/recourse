@@ -95,7 +95,7 @@ for (const warning of config.warnings) console.log(`warning:  ${warning}`);
 /*
  * The runner pin is checked before anything is sent: a pin the network cannot
  * decode aborts the deployment after consensus, when the only evidence left is
- * `invalid_contract ... malformed_runner` on a finalized transaction with no
+ * `invalid_contract runner malformed` on a finalized transaction with no
  * traceback and nothing deployed. Checking it here costs nothing and names the
  * offending character.
  */
@@ -125,6 +125,60 @@ if (
 }
 
 const client = createClient({ chain: config.chain, account });
+
+/* ------------------------------------------------------- network-side probe */
+
+/*
+ * Ask the network to resolve the contract before paying it to.
+ *
+ * Every check above is local: shape, alphabet, canonical gvm32. None of them can
+ * answer the only question that decides the deployment — does *this* network
+ * have the runner that hash names? GenVM repackages the python runner between
+ * releases, so a pin that was official last week is refused today with
+ * `invalid_contract runner malformed`: zero storage written, no traceback, and a
+ * transaction that still FINALIZES with consensus "Accepted". Discovering that
+ * costs a fee deposit and a full round trip through consensus.
+ *
+ * `getContractSchemaForCode` compiles the source against the live runner cache
+ * and costs nothing, so it goes first. A runner-shaped refusal stops the deploy
+ * here with the fix named. Anything else — an unsupported method, a rate limit,
+ * a transport hiccup — is reported and the deploy continues, because an
+ * inconclusive probe is not evidence of a bad contract.
+ */
+if (env.RECOURSE_SKIP_SCHEMA_PROBE === "1") {
+  console.log("probe:    skipped (RECOURSE_SKIP_SCHEMA_PROBE=1)");
+} else {
+  try {
+    const schema = await client.getContractSchemaForCode(code);
+    const methods = Object.keys(schema?.methods ?? {});
+    console.log(
+      `probe:    the network resolved this contract — ${methods.length} method(s)` +
+        (methods.length > 0 ? `: ${methods.join(", ")}` : ""),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/runner|invalid_contract|malformed/i.test(message)) {
+      console.error("\nThe network could not load this contract's runner:");
+      console.error(`  ${message}`);
+      for (const pin of pins) console.error(`  contract pins: ${pin}`);
+      console.error(`  expected here: ${STUDIO_NEXT_PY_GENLAYER_PIN}`);
+      console.error(
+        "\nA well-formed pin naming a runner this network does not ship fails exactly" +
+          "\nlike this, before one line of the contract runs — the same symptom as a" +
+          "\nmalformed pin, from a different cause. The hash tracks the network's" +
+          "\nGenVM release, not the contract: check which release the target network" +
+          "\nis running and update line 2 of contracts/recourse_adjudicator.py to" +
+          "\nmatch it.",
+      );
+      console.error("\nNothing was sent and no fee was taken.");
+      console.error("Re-run with RECOURSE_SKIP_SCHEMA_PROBE=1 to skip this check.");
+      process.exit(1);
+    }
+    console.log(
+      `probe:    inconclusive (${message.slice(0, 300)}); continuing to the fee quote`,
+    );
+  }
+}
 
 /* ------------------------------------------------------------------ funding */
 

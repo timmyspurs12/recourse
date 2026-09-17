@@ -76,16 +76,88 @@ docker run -d -p 80:3000 -v recourse-data:/app/.recourse \
 ## The network: Studio Next
 
 The hackathon requires the deployment to run on **Studio Next** — Consensus v0.6,
-chain id **61997**, RPC `https://studio-next.genlayer.com/api`, explorer
-`https://explorer-studio-dev.genlayer.com/`. That is the default here.
+chain id **61997**, explorer `https://explorer-studio-dev.genlayer.com/`. That is
+the default here.
+
+**The RPC endpoint is `https://studio-dev.genlayer.com/api`.** `studio-next.genlayer.com`
+serves the browser app and is an alias; the canonical JSON-RPC endpoint for chain
+61997 — the one the SDK's `studioDevnet` preset, the `genlayer` CLI and
+`genlayer-py` all use — is the `studio-dev` hostname. `integrations/genlayer/config.ts`
+points there, and the label `GENLAYER STUDIO NEXT` is applied on top of it. Use
+the canonical host in any integration; the alias is for humans with browsers.
 
 | Network | Chain | Fees | Use when |
 | --- | --- | --- | --- |
-| `studio-next` | 61997 | quoted per write | **the submission** — the required network |
-| `studio-dev` | 61997 | quoted per write | the RC preview at the older hostname, same chain |
+| `studio-next` | 61997 | quoted per write | **the submission** — the required network, with an explorer link |
+| `studio-dev` | 61997 | quoted per write | the same chain and the same endpoint, without the explorer preset |
 | `testnet-bradbury` | 4221 | GEN | durable, production-like verification with a public explorer |
 | `studionet` | 61999 | gasless | the previous stable Studio (Consensus v0.5) |
 | `localnet` | — | gasless | a local GenLayer node |
+
+Studio Next is a hosted development network and **may be reset**. A ruling there
+is real consensus, but it is not durable for weeks the way a Bradbury deployment
+is; the app reports it as `DEMO` for exactly that reason rather than over-claiming.
+
+### Current deployment
+
+| | |
+| --- | --- |
+| Contract | `0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56` |
+| Chain | 61997 · Studio Next · `https://studio-dev.genlayer.com/api` |
+| Deploy tx | [`0x69e1be16eb0cd40e3cc029d5938ca3d20ae78dac492445617a71150a15f86a7f`](https://explorer-studio-dev.genlayer.com/tx/0x69e1be16eb0cd40e3cc029d5938ca3d20ae78dac492445617a71150a15f86a7f) |
+| Result | `FINALIZED` · consensus `Accepted` · execution `FINISHED_WITH_RETURN` · 5 validators |
+| Fee | 0.175 GEN deposited, 0.000078 GEN consumed, 0.174921 GEN refunded |
+| Explorer | https://explorer-studio-dev.genlayer.com/address/0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56 |
+
+The same values live in `genlayer.deployment.json`, which a fresh clone reads by
+default — `GENLAYER_CONTRACT_ADDRESS` is only needed to override them.
+
+### The runner pin, and why a deploy can fail with nothing wrong locally
+
+Line 2 of `contracts/recourse_adjudicator.py` names the runner GenVM must load:
+
+```python
+# v0.3.0
+# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+```
+
+That hash identifies a **build of the python runner**, and GenVM repackages it
+between releases. It therefore tracks the *network*, not the contract: when the
+fleet moves to a new GenVM release the hash changes, and a contract pinning the
+previous one stops deploying even though nothing about it changed.
+
+This is not a hypothetical. Both halves were observed on chain 61997 on the same
+day, 71 minutes apart, with the same contract source and the same fee preset:
+
+| | `9b8kjyda…` (GenVM v0.6.0-rc1/rc2) | `5jycge4q…` (v0.6.0-rc3) |
+| --- | --- | --- |
+| Deploy tx | [`0x8a9d30c2…`](https://explorer-studio-dev.genlayer.com/tx/0x8a9d30c242fc758f5be19d0a8d25e39fbece1e775e1f0595424906372d2f6f5e) | [`0x69e1be16…`](https://explorer-studio-dev.genlayer.com/tx/0x69e1be16eb0cd40e3cc029d5938ca3d20ae78dac492445617a71150a15f86a7f) |
+| Execution | `ERROR` — `invalid_contract runner malformed` | `SUCCESS` — `Return` |
+| Storage written | **0 wei** | 100,250,000,000 wei |
+| Address | `0xa57a7aA7…` — **orphan, no code behind it** | `0x17DA09A8…` — live |
+| Tx status | `FINALIZED`, consensus `Accepted` | `FINALIZED`, consensus `Accepted` |
+
+Read the last row twice: the failed deploy **finalized with consensus Accepted**.
+A transaction that succeeded as far as the network's consensus is concerned
+stored nothing at all. Two consequences follow, and the repo is built around both:
+
+1. **`FINALIZED` is not success.** `scripts/genlayer-deploy.mts` requires
+   `FINISHED_WITH_RETURN` *and* a reported address before it writes any record,
+   which is why the orphan address above was never recorded anywhere.
+2. **Local validation cannot catch this.** `runnerPinProblems()` checks shape,
+   alphabet and canonical gvm32 — `9b8kjyda…` passes all three, because it is a
+   perfectly valid hash of a runner this fleet no longer ships. Only the network
+   knows what it has, so the deploy script now asks it first with
+   `getContractSchemaForCode`, which compiles the source against the live runner
+   cache for free and refuses to take a fee deposit for a contract the network
+   cannot load. Skip it with `RECOURSE_SKIP_SCHEMA_PROBE=1`.
+
+If a deploy fails this way: check which Studio release the target network is
+running, read the pin its example contracts use, and update line 2 to match.
+`integrations/genlayer/runner-pin.ts` holds the expected value as
+`STUDIO_NEXT_PY_GENLAYER_PIN`, and `tests/genlayer.test.ts` asserts the contract
+agrees with it — so update both, or the test tells you.
+
 
 ### Fees, honestly
 
