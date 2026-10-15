@@ -140,15 +140,19 @@ v1 contract pins the rc3–rc7 runner (`5jycge4q…`).
 | Live adjudication on v2 (all-or-nothing + graduated) | **Pending.** RUNBOOK §4 and §6 | tx: *fill in* |
 | Live appeal on v2 | **Pending.** RUNBOOK §5 | tx + appeal charge + outcome: *fill in* |
 | Live app (Railway) on v2 | **Pending.** RUNBOOK §7 | https://recourse-production-bf02.up.railway.app |
-| CI on GitHub | Workflow committed. It runs if Actions is enabled for the repository | Actions tab |
+| CI on GitHub | **Green**: lint, types, 96 app tests, 28 contract tests on genlayer-test 0.30.0rc2 + GenVM v0.6.0-rc9 | [run 38734558429](https://github.com/timmyspurs12/recourse/actions/runs/38734558429) |
 | The v1 contract still executing on Studio after the rc9 move | **Unknown.** Could not be checked from the build environment; the redeploy above supersedes it | — |
 
 **How the offline parts were verified.**
 
-- `npm test` (96/96), `npx eslint` and `npx tsc --noEmit` (after `next typegen`) all pass.
-- The contract tests ran with genlayer-test 0.30.0rc2's Direct Mode engine (`gltest.direct`,
-  unmodified) against the GenVM v0.3.x python SDK source. CI and `npm run test:contract` run them
-  against the published package.
+- `npm test` (96/96), `npx eslint` and `npx tsc --noEmit` (after `next typegen`) all pass locally
+  and in CI.
+- The 28 contract tests pass in GitHub Actions with the **published** genlayer-test 0.30.0rc2 and
+  the **GenVM v0.6.0-rc9** runner bundle (`GENVM_VERSION=v0.6.0-rc9`). Direct Mode resolves the
+  runner named on line 2 of the contract from that bundle, so a green run also confirms rc9 ships
+  `py-genlayer:babwp9t3…`.
+  - [First CI run on this branch](https://github.com/timmyspurs12/recourse/actions/runs/38734558429):
+    both jobs green.
 - No on-network claim is made for v2 until the evidence table below is filled.
 
 **Not claimed.**

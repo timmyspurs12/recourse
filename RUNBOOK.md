@@ -276,8 +276,9 @@ finality.
    git push
    ```
 
-4. GitHub → **Actions**. If Actions is enabled for the repository, the **CI** workflow runs lint,
-   types, `npm test` and the contract tests. A green run is good evidence to link.
+4. GitHub → **Actions**. The **CI** workflow runs lint, types, `npm test` and the contract tests
+   on every push. It was green on the PR branch. A green run on `main` after merging is good
+   evidence to link.
 
 ---
 
