@@ -1,0 +1,487 @@
+# GenLayer evidence: runs Recourse v0.2's on-network checks and saves the results.
+#
+# Start it from the Actions tab: "GenLayer evidence" → "Run workflow". It needs no
+# secrets: every step uses a throwaway account that GenLayer Studio funds itself.
+#
+#   1. deploy contract v2 to Studio Next (skipped when v2 is already recorded)
+#   2. smoke test, all-or-nothing, with a prompt-injection attempt
+#   3. smoke test, graduated remedy
+#   4. one real appeal, provisional → final (retried if the finality window closes first)
+#   5. npm run test:live
+#   6. save: evidence/run-N.md (values + full logs), MILESTONE.md, DEPLOY.md,
+#      genlayer.deployment.json
+#   7. check which contract the live site reports
+#
+# Nothing it saves is typed by hand: every value comes from this run's output, and a
+# check that did not pass is recorded as not passed.
+
+name: GenLayer evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      redeploy:
+        description: Deploy a new contract even if v2 is already recorded
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: genlayer-evidence
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://recourse-production-bf02.up.railway.app
+  NO_COLOR: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The branch as it is now, not as it was when the run was queued, so a
+          # re-run sees what an earlier run saved.
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: 1 · Deploy contract v2
+        id: deploy
+        env:
+          REDEPLOY: ${{ inputs.redeploy }}
+        run: |
+          mkdir -p evidence-logs
+          recorded=$(node -p "(require('./genlayer.deployment.json').deployments['studio-next'] || {}).contractVersion || ''")
+          if [[ "$recorded" == 2.* && "$REDEPLOY" != "true" ]]; then
+            echo "Contract v$recorded is already recorded in genlayer.deployment.json; not deploying again." | tee evidence-logs/1-deploy.log
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          else
+            npm run --silent genlayer:deploy 2>&1 | tee evidence-logs/1-deploy.log
+          fi
+
+      - name: Deploy failed, show why
+        if: ${{ !cancelled() && steps.deploy.outcome == 'failure' }}
+        run: |
+          fence=$(printf '%.0s`' 1 2 3)
+          {
+            echo "### ❌ The contract was not deployed, so nothing else ran"
+            echo "Copy everything in the box below into the chat:"
+            echo "${fence}text"
+            tail -n 60 evidence-logs/1-deploy.log 2>/dev/null || echo "(no log)"
+            echo "$fence"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 2 · Smoke test (all-or-nothing)
+        id: smoke
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        run: npm run --silent genlayer:smoke 2>&1 | tee evidence-logs/2-smoke.log
+
+      - name: 3 · Smoke test (graduated)
+        id: graduated
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        run: npm run --silent genlayer:smoke -- --graduated 2>&1 | tee evidence-logs/3-smoke-graduated.log
+
+      - name: 4 · Appeal (provisional → final)
+        id: appeal
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        run: |
+          # Exit code 2 means Studio's finality window closed before the appeal
+          # could be filed. That is timing, not a fault, so try again.
+          for attempt in 1 2 3; do
+            echo "── attempt $attempt ──" | tee -a evidence-logs/4-appeal.log
+            set +e
+            npm run --silent genlayer:appeal 2>&1 | tee -a evidence-logs/4-appeal.log
+            code=${PIPESTATUS[0]}
+            set -e
+            if [[ $code -ne 2 ]]; then exit "$code"; fi
+            echo "The finality window closed before the appeal was filed; trying again." | tee -a evidence-logs/4-appeal.log
+          done
+          exit 2
+
+      - name: 5 · Live tests (npm run test:live)
+        id: live
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        run: npm run --silent test:live 2>&1 | tee evidence-logs/5-live.log
+
+      - name: 6 · Save the results in the repository
+        id: record
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          DEPLOY_SKIPPED: ${{ steps.deploy.outputs.skipped }}
+          OUTCOME_SMOKE: ${{ steps.smoke.outcome }}
+          OUTCOME_GRADUATED: ${{ steps.graduated.outcome }}
+          OUTCOME_APPEAL: ${{ steps.appeal.outcome }}
+          OUTCOME_LIVE: ${{ steps.live.outcome }}
+        run: |
+          cat > "$RUNNER_TEMP/record.mjs" <<'JS'
+          // Writes evidence/run-N.md from this run's logs, fills the matching rows in
+          // MILESTONE.md and DEPLOY.md, and writes the run summary. It never invents
+          // a value: anything this run did not print is left exactly as it was.
+          import fs from "node:fs";
+
+          const env = process.env;
+          const read = (file) => {
+            try {
+              return fs.readFileSync(file, "utf8").replace(/\u001b\[[0-9;]*m/g, "");
+            } catch {
+              return "";
+            }
+          };
+          const pick = (text, re) => {
+            const found = text.match(re);
+            return found ? found[1].trim() : null;
+          };
+          const code = (s) => "`" + s + "`";
+          const fence = (n) => "`".repeat(n);
+          const HASH = "0x[0-9a-fA-F]{64}";
+
+          const runNumber = env.GITHUB_RUN_NUMBER;
+          const attempt = env.GITHUB_RUN_ATTEMPT || "1";
+          const runUrl = env.GITHUB_SERVER_URL + "/" + env.GITHUB_REPOSITORY + "/actions/runs/" + env.GITHUB_RUN_ID;
+          const evidenceFile = "evidence/run-" + runNumber + (attempt === "1" ? "" : "-attempt-" + attempt) + ".md";
+          const proof = "[run #" + runNumber + "](" + evidenceFile + ")";
+
+          /* The deployment, from the record the deploy script wrote. */
+          const record = JSON.parse(read("genlayer.deployment.json") || "{}");
+          const dep = (record.deployments || {})["studio-next"] || {};
+          const address = /^0x[0-9a-fA-F]{40}$/.test(dep.address || "") ? dep.address : null;
+          const isV2 = String(dep.contractVersion || "").startsWith("2.");
+          const deployedNow = env.DEPLOY_SKIPPED !== "true";
+          const previous = Array.isArray(dep.history) && dep.history[0] ? dep.history[0].address : null;
+          const explorerRoot = dep.explorer ? dep.explorer.replace(/address\/.*$/, "") : null;
+          const txLink = (h) => (explorerRoot ? "[" + code(h) + "](" + explorerRoot + "tx/" + h + ")" : code(h));
+          const addressLink = (a) => (explorerRoot ? "[" + code(a) + "](" + explorerRoot + "address/" + a + ")" : code(a));
+
+          const logs = {
+            deploy: read("evidence-logs/1-deploy.log"),
+            smoke: read("evidence-logs/2-smoke.log"),
+            graduated: read("evidence-logs/3-smoke-graduated.log"),
+            appeal: read("evidence-logs/4-appeal.log"),
+            live: read("evidence-logs/5-live.log"),
+          };
+          const policy = pick(logs.deploy, /^policy:\s+(RecourseAdjudicator .+)$/m);
+          const deposit = pick(logs.deploy, /^\s+deposit:\s+(.+)$/m);
+
+          /* Smoke runs: the transaction, and the ruling read back from finalized state. */
+          function smoke(text) {
+            const raw = pick(text, /^RULING:\s+(.+)$/m);
+            let ruling = null;
+            try {
+              ruling = raw ? JSON.parse(raw) : null;
+            } catch {
+              ruling = null;
+            }
+            return {
+              tx: pick(text, new RegExp("^adjudicate tx: (" + HASH + ")", "m")),
+              status: pick(text, /^status:\s+(.+)$/m),
+              ruling: ruling && typeof ruling === "object" ? ruling : null,
+            };
+          }
+          const award = (r) =>
+            r.decision === "SPLIT" && typeof r.refund_bps === "number"
+              ? code("SPLIT") + ", " + code("refund_bps " + r.refund_bps) + " (" + r.refund_bps / 100 + "% back to the buyer)"
+              : code(String(r.decision));
+          const finalized = (status) => /finalized/i.test(status || "");
+          const s1 = smoke(logs.smoke);
+          const s2 = smoke(logs.graduated);
+          const smokeOk = Boolean(
+            env.OUTCOME_SMOKE === "success" && s1.tx && s1.ruling && finalized(s1.status) && s1.ruling.decision === "BUYER_WINS",
+          );
+          const graduatedOk = Boolean(
+            env.OUTCOME_GRADUATED === "success" && s2.tx && s2.ruling && finalized(s2.status) &&
+              s2.ruling.remedy_mode === "GRADUATED" && ["SPLIT", "BUYER_WINS"].includes(s2.ruling.decision),
+          );
+
+          /* The appeal: the summary block genlayer-appeal prints at the end. */
+          const marker = "summary (paste into the milestone notes)";
+          const appealTail = logs.appeal.includes(marker) ? logs.appeal.slice(logs.appeal.lastIndexOf(marker)) : "";
+          const appeal = {
+            tx: pick(appealTail, new RegExp("^adjudicate tx:\\s+(" + HASH + ")", "m")),
+            provisional: pick(appealTail, /^provisional ruling:\s+(.+)$/m),
+            charge: pick(appealTail, /^appeal charge:\s+(.+)$/m),
+            final: pick(appealTail, /^final ruling:\s+(.+)$/m),
+            outcome: pick(appealTail, /^appeal outcome:\s+(\S+)/m),
+            status: pick(appealTail, /^final status:\s+(.+)$/m),
+          };
+          const decisionOf = (s) => (s || "?").split(" — ")[0];
+          const appealOk = Boolean(env.OUTCOME_APPEAL === "success" && appeal.tx && appeal.outcome && finalized(appeal.status));
+          const appealText = () =>
+            "adjudicate tx " + txLink(appeal.tx) + " · charge " + code(appeal.charge || "not reported") +
+            " · provisional " + code(decisionOf(appeal.provisional)) + " → final " + code(decisionOf(appeal.final)) +
+            " · " + code(appeal.outcome || "?");
+
+          /* Live tests: one line per adjudication, then the runner's totals. */
+          const liveRuns = [...logs.live.matchAll(new RegExp("(dsp_live_\\S+): (\\w+) · tx (" + HASH + ")", "g"))].map(
+            (x) => ({ status: x[2], tx: x[3] }),
+          );
+          const passed = Number(pick(logs.live, /^(?:#|ℹ)\s*pass\s+(\d+)/m) ?? NaN);
+          const failed = Number(pick(logs.live, /^(?:#|ℹ)\s*fail\s+(\d+)/m) ?? NaN);
+          const liveOk = env.OUTCOME_LIVE === "success" && passed > 0 && failed === 0;
+
+          /* The results table. */
+          const PASS = "✅ passed";
+          const result = (outcome, ok) => (ok ? PASS : !outcome || outcome === "skipped" ? "— not run" : "❌ did not pass");
+          const rows = [
+            [
+              deployedNow ? "Contract v2 deployed (" + code("npm run genlayer:deploy") + ")" : "Contract v2 (deployed by an earlier run)",
+              !address ? "❌ no address recorded" : !isV2 ? "⚠️ deployed, version not read back" : deployedNow ? PASS : "↺ reused",
+              address
+                ? addressLink(address) + " · deploy tx " + txLink(dep.deployTx) + " · runner " + code(dep.runner || "not recorded") +
+                  (policy ? " · " + code(policy) : "")
+                : "—",
+            ],
+            [
+              "Smoke: all-or-nothing, with a prompt-injection attempt (" + code("npm run genlayer:smoke") + ")",
+              result(env.OUTCOME_SMOKE, smokeOk),
+              s1.tx
+                ? "tx " + txLink(s1.tx) + " · " + (s1.status || "status not printed") + " · ruling " +
+                  (!s1.ruling
+                    ? "not read back"
+                    : s1.ruling.decision === "BUYER_WINS"
+                      ? award(s1.ruling) + ", as expected, although the merchant text ordered " + code("MERCHANT_WINS")
+                      : award(s1.ruling) + "; expected " + code("BUYER_WINS") + " (the merchant text ordered " + code("MERCHANT_WINS") + ")")
+                : "no transaction",
+            ],
+            [
+              "Smoke: graduated remedy (" + code("npm run genlayer:smoke -- --graduated") + ")",
+              result(env.OUTCOME_GRADUATED, graduatedOk),
+              s2.tx ? "tx " + txLink(s2.tx) + " · " + (s2.status || "status not printed") + " · ruling " + (s2.ruling ? award(s2.ruling) : "not read back") : "no transaction",
+            ],
+            [
+              "Appeal through GenLayer, provisional → final (" + code("npm run genlayer:appeal") + ")",
+              result(env.OUTCOME_APPEAL, appealOk),
+              appeal.tx
+                ? appealText() + " · " + (appeal.status || "status not printed")
+                : /finality window closed/.test(logs.appeal)
+                  ? "Studio's finality window closed before an appeal could be filed, on every attempt"
+                  : "no summary printed",
+            ],
+            [
+              "Live tests (" + code("npm run test:live") + ")",
+              result(env.OUTCOME_LIVE, liveOk),
+              (Number.isNaN(passed) ? "no test totals printed" : passed + " passed, " + (Number.isNaN(failed) ? "?" : failed) + " failed") +
+                (liveRuns.length ? " · " + liveRuns.map((r) => txLink(r.tx) + " " + r.status).join(" · ") : ""),
+            ],
+          ];
+          const table = ["| Check | Result | Evidence |", "| --- | --- | --- |", ...rows.map((r) => "| " + r.join(" | ") + " |")].join("\n");
+          const problems = [];
+          if (!(address && isV2)) problems.push("deploy");
+          if (!smokeOk) problems.push("smoke test");
+          if (!graduatedOk) problems.push("graduated smoke test");
+          if (!appealOk) problems.push("appeal");
+          if (!liveOk) problems.push("live tests");
+
+          /* evidence/run-N.md: the table plus every log, unedited. */
+          const fenced = (name, text) => {
+            let lines = text.trimEnd().split("\n");
+            if (lines.length > 400) {
+              lines = [...lines.slice(0, 120), "… " + (lines.length - 370) + " lines omitted here; the run keeps the full log …", ...lines.slice(-250)];
+            }
+            return "<details><summary>" + name + "</summary>\n\n" + fence(4) + "text\n" + (text.trim() ? lines.join("\n") : "(this step did not run)") + "\n" + fence(4) + "\n\n</details>";
+          };
+          fs.mkdirSync("evidence", { recursive: true });
+          fs.writeFileSync(
+            evidenceFile,
+            [
+              "# On-network evidence: Recourse v0.2 on GenLayer Studio Next (run #" + runNumber + ")",
+              "",
+              "Produced by the **GenLayer evidence** workflow ([`.github/workflows/genlayer-evidence.yml`](../.github/workflows/genlayer-evidence.yml)),",
+              "[run #" + runNumber + "](" + runUrl + "), finished " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC.",
+              "Every value below was printed by the network during that run; the complete logs follow the table.",
+              "Nothing here is typed by hand, and a check that did not pass is recorded as such.",
+              "",
+              table,
+              "",
+              "Contract: " + (address ? addressLink(address) : "none") + " · chain " + (dep.chainId || "?") + " · " + code(dep.rpcUrl || "?") + "." +
+                (previous ? " The previous deployment, " + code(previous) + ", stays under `history` in `genlayer.deployment.json`." : ""),
+              "",
+              "## Logs",
+              "",
+              fenced("1 · deploy", logs.deploy),
+              "",
+              fenced("2 · smoke test, all-or-nothing", logs.smoke),
+              "",
+              fenced("3 · smoke test, graduated", logs.graduated),
+              "",
+              fenced("4 · appeal", logs.appeal),
+              "",
+              fenced("5 · live tests", logs.live),
+              "",
+            ].join("\n"),
+          );
+
+          /* MILESTONE.md: fill only the rows this run proved. */
+          const setRow = (text, firstCell, cells) => {
+            const lines = text.split("\n");
+            const at = lines.findIndex((line) => line.startsWith("| " + firstCell + " |"));
+            if (at !== -1) lines[at] = "| " + firstCell + " | " + cells.join(" | ") + " |";
+            return lines.join("\n");
+          };
+          const done = "**Done** · " + proof;
+          let milestone = read("MILESTONE.md");
+          if (milestone && address && isV2) {
+            if (deployedNow) {
+              milestone = setRow(milestone, "v2 contract deployed on Studio Next", [done, addressLink(address) + " · deploy tx " + txLink(dep.deployTx)]);
+              milestone = setRow(milestone, "v2 contract address (Studio Next, chain 61997)", [addressLink(address) + " · " + proof]);
+              milestone = setRow(milestone, "v2 deploy tx · runner pin used", [txLink(dep.deployTx) + " · " + code(dep.runner || "not recorded") + " · " + proof]);
+              if (policy) milestone = setRow(milestone, "`get_policy` read back", [code(policy) + " · " + proof]);
+              milestone = milestone.replace(/v2 contract `0x[0-9a-fA-F…]*` \(deploy tx `0x[0-9a-fA-F…]*`\)/, "v2 contract `" + address + "` (deploy tx `" + dep.deployTx + "`)");
+            }
+            if (smokeOk && graduatedOk) {
+              milestone = setRow(milestone, "Live adjudication on v2 (all-or-nothing + graduated)", [done, "all-or-nothing " + txLink(s1.tx) + " · graduated " + txLink(s2.tx)]);
+            }
+            if (smokeOk) {
+              milestone = setRow(milestone, "Smoke: all-or-nothing ruling + prompt-injection refused", [
+                "tx " + txLink(s1.tx) + " · ruling " + award(s1.ruling) + " although the merchant text ordered " + code("MERCHANT_WINS") + " · " + proof,
+              ]);
+            }
+            if (graduatedOk) milestone = setRow(milestone, "Smoke: graduated ruling", ["tx " + txLink(s2.tx) + " · ruling " + award(s2.ruling) + " · " + proof]);
+            if (appealOk) {
+              milestone = setRow(milestone, "Live appeal on v2", [done, "adjudicate tx " + txLink(appeal.tx) + " · " + code(appeal.outcome)]);
+              milestone = setRow(milestone, "Live appeal", [appealText() + " · " + proof]);
+              milestone = milestone.replace(/live appeal tx `0x[0-9a-fA-F…]*`/, "live appeal tx `" + appeal.tx + "`");
+            }
+            if (liveOk) {
+              milestone = setRow(milestone, "`npm run test:live`", [passed + " passed, 0 failed · " + liveRuns.map((r) => txLink(r.tx)).join(" · ") + " · " + proof]);
+            }
+            milestone = milestone.replace(
+              "- No on-network claim is made for v2 until the evidence table below is filled.",
+              "- On-network results for v2 come from the GenLayer evidence workflow; each filled row links to the\n" +
+                "  run that produced it, with full logs. Rows still marked **Pending** carry no on-network claim.",
+            );
+            milestone = milestone.replace(
+              "## Evidence to cite (fill in after running [`RUNBOOK.md`](RUNBOOK.md))",
+              "## Evidence to cite (each value links to the run that printed it)",
+            );
+            fs.writeFileSync("MILESTONE.md", milestone);
+          }
+
+          /* DEPLOY.md: the "Current deployment" table, when this run deployed. */
+          let deployDoc = read("DEPLOY.md");
+          const start = deployDoc.indexOf("### Current deployment");
+          const end = deployDoc.indexOf("The same values live in `genlayer.deployment.json`");
+          if (deployDoc && deployedNow && address && isV2 && start !== -1 && end > start) {
+            const block = [
+              "### Current deployment",
+              "",
+              "> The **v2** contract (Recourse v0.2), deployed and recorded by the GenLayer evidence workflow",
+              "> (" + proof + ")." + (previous ? " The previous deployment, " + code(previous) + ", stays under `history`" : ""),
+              ...(previous ? ["> in `genlayer.deployment.json`, so disputes filed against it are still polled there."] : []),
+              "",
+              "| | |",
+              "| --- | --- |",
+              "| Contract | " + code(address) + " · RecourseAdjudicator " + dep.contractVersion + " |",
+              "| Chain | " + (dep.chainId || "?") + " · Studio Next · " + code(dep.rpcUrl || "?") + " |",
+              "| Deploy tx | " + txLink(dep.deployTx) + " |",
+              "| Result | " + code(dep.status || "not recorded") + " |",
+              "| Runner | " + code(dep.runner || "not recorded") + " |",
+              ...(deposit ? ["| Fee deposit | " + deposit + " |"] : []),
+              "| Explorer | " + (dep.explorer || "—") + " |",
+              "",
+              "",
+            ].join("\n");
+            deployDoc = deployDoc.slice(0, start) + block + deployDoc.slice(end);
+            fs.writeFileSync("DEPLOY.md", deployDoc);
+          }
+
+          /* The run page: the same table, plus a plain-text copy for the chat. */
+          const plain = [
+            "GenLayer evidence run #" + runNumber + " · " + runUrl,
+            "contract:   " + (address || "none") + " · v" + (dep.contractVersion || "?") + " · deploy tx " + (dep.deployTx || "?") + (deployedNow ? "" : " (earlier run)"),
+            "smoke:      " + (smokeOk ? "PASS" : "NOT PASSED") + " · tx " + (s1.tx || "-") + " · " + (s1.ruling ? s1.ruling.decision : "no ruling"),
+            "graduated:  " + (graduatedOk ? "PASS" : "NOT PASSED") + " · tx " + (s2.tx || "-") + " · " + (s2.ruling ? s2.ruling.decision + " " + s2.ruling.refund_bps + " bps" : "no ruling"),
+            "appeal:     " + (appealOk ? "PASS" : "NOT PASSED") + " · tx " + (appeal.tx || "-") + " · " + decisionOf(appeal.provisional) + " → " + decisionOf(appeal.final) + " · " + (appeal.outcome || "-") + " · charge " + (appeal.charge || "-"),
+            "live tests: " + (liveOk ? "PASS" : "NOT PASSED") + " · " + (Number.isNaN(passed) ? "?" : passed) + " passed, " + (Number.isNaN(failed) ? "?" : failed) + " failed",
+            "saved:      " + evidenceFile,
+          ];
+          fs.appendFileSync(
+            env.GITHUB_STEP_SUMMARY,
+            [
+              "## GenLayer evidence · run #" + runNumber,
+              "",
+              table,
+              "",
+              problems.length ? "**Not everything passed:** " + problems.join(", ") + ". The logs are in `" + evidenceFile + "`." : "**Everything passed.**",
+              "",
+              "Copy the box below into the chat:",
+              "",
+              fence(3) + "text",
+              ...plain,
+              fence(3),
+              "",
+            ].join("\n"),
+          );
+          fs.appendFileSync(env.GITHUB_OUTPUT, "address=" + (address && isV2 ? address : "") + "\nproblems=" + problems.join(", ") + "\n");
+          JS
+          node "$RUNNER_TEMP/record.mjs"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add genlayer.deployment.json MILESTONE.md DEPLOY.md evidence
+          if git diff --cached --quiet; then
+            echo "saved_to=unchanged" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -q -m "evidence: GenLayer v0.2 on-network results (workflow run #$GITHUB_RUN_NUMBER)"
+          git pull -q --rebase origin "$GITHUB_REF_NAME" || { git rebase --abort || true; }
+          if git push -q origin "HEAD:$GITHUB_REF_NAME"; then
+            echo "saved_to=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "**Saved to \`$GITHUB_REF_NAME\`.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            branch="genlayer-evidence-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+            git push -q origin "HEAD:refs/heads/$branch"
+            echo "saved_to=$branch" >> "$GITHUB_OUTPUT"
+            echo "**\`$GITHUB_REF_NAME\` refused the save, so the results are on branch \`$branch\`.** Open a pull request from it and merge it: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$GITHUB_REF_NAME...$branch?expand=1" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Results saved to branch $branch. Open a pull request from it and merge it."
+          fi
+
+      - name: 7 · Check which contract the live site reports
+        if: ${{ !cancelled() && steps.record.outputs.address != '' && (steps.record.outputs.saved_to == github.ref_name || steps.record.outputs.saved_to == 'unchanged') }}
+        continue-on-error: true
+        env:
+          ADDRESS: ${{ steps.record.outputs.address }}
+        run: |
+          # Railway redeploys after the save above; give it up to eight minutes.
+          live=""
+          for i in $(seq 1 24); do
+            live=$(curl -fsS --max-time 20 "$SITE_URL/api/network" |
+              node -e 'let s="";process.stdin.on("data",(d)=>(s+=d)).on("end",()=>{try{process.stdout.write(JSON.parse(s).adjudication.contractAddress||"")}catch{}})' || true)
+            if [[ -n "$live" && "${live,,}" == "${ADDRESS,,}" ]]; then
+              echo "### ✅ The live site ($SITE_URL) uses the new contract" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 20
+          done
+          {
+            echo "### ⚠️ The live site still reports contract \`${live:-unknown}\`, not \`$ADDRESS\`"
+            echo "In Railway, open the service → **Variables**: delete \`GENLAYER_CONTRACT_ADDRESS\` (or set it to \`$ADDRESS\`), then redeploy."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the raw logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: genlayer-evidence-logs
+          path: |
+            evidence-logs/
+            genlayer.deployment.json
+          if-no-files-found: ignore
+
+      - name: Result
+        if: ${{ !cancelled() && steps.record.outputs.problems != '' }}
+        env:
+          PROBLEMS: ${{ steps.record.outputs.problems }}
+        run: |
+          echo "::error::Not everything passed: $PROBLEMS. The summary on this page has the details."
+          exit 1
