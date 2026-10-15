@@ -15,7 +15,7 @@ the delivery is checked against them; and if a mandatory term is broken, the buy
 its money back — no support ticket, no human reviewer, no card network.
 
 ```
-AGENT → PAY → VERIFY → DISPUTE → ADJUDICATE → REFUND / RELEASE
+AGENT → PAY → VERIFY → DISPUTE → ADJUDICATE → (APPEAL) → FINAL → REFUND / SPLIT / RELEASE
 ```
 
 The product is the **protected transaction**. Not a court, not a jury — a purchase that can be
@@ -26,6 +26,13 @@ undone when the promise is broken.
 **Submitting or deploying this?** [`SUBMISSION.md`](SUBMISSION.md) has the Agent Tank form
 pre-filled and the differentiation analysis; [`DEPLOY.md`](DEPLOY.md) gets you a live URL in about
 five minutes.
+
+**What changed since the accepted hackathon version?** v0.2 — *contestable, final, proportional*:
+settlement waits for GenLayer finality, the losing side can appeal through GenLayer's own appeal
+mechanism, agreements can allow graduated (partial) refunds, and the v2 contract binds every
+ruling to the request that asked for it. [`MILESTONE.md`](MILESTONE.md) has the delta and its
+status; [`CHANGELOG.md`](CHANGELOG.md) the detail; [`RUNBOOK.md`](RUNBOOK.md) the steps to deploy
+and verify it.
 
 ## Run it
 
@@ -46,8 +53,10 @@ purchase**. The dispute path takes about 30 seconds, most of it spent waiting fo
 validators to rule.
 
 ```bash
-npm test               # 58 domain, adversarial, auth and Studio Next tests, no network
-npm run test:live      # opt-in: two real adjudications on-network (buyer wins, merchant wins)
+npm test               # 96 domain, adversarial, auth, finality/appeal and forum tests, no network
+npm run test:contract  # 28 contract tests in genlayer-test Direct Mode (Python ≥ 3.12)
+npm run test:live      # opt-in: three real adjudications on-network (buyer wins, merchant wins, split)
+npm run genlayer:appeal  # one real appeal: provisional ruling → appeal → final, via the protocol's adapter
 npm run wallet                          # create a deployment wallet for a public testnet
 npm run agents generate shopper.agent   # register an agent and print its key once
 npm run agents list                     # who is bound to which key
@@ -69,6 +78,9 @@ reason rather than filled in with something plausible.
 | State machine, agreements, verification, disputes, settlement | **Real** | Full domain implementation, persisted, 25 tests |
 | Agreement + evidence hashing | **Real** | Canonical JSON (RFC 8785 style) → sha256, recomputable by either party |
 | GenLayer adjudication | **Real** | `RecourseAdjudicator` Intelligent Contract deployed on GenLayer; real transactions, real validator consensus, real rulings |
+| Finality (v0.2) | **Real** | An `ACCEPTED` ruling is recorded as *provisional* and read from the latest non-final state; money moves only once the network reports `FINALIZED` and the ruling is read from finalized state. Rulings recorded on acceptance by v0.1 are re-confirmed on-chain before they can settle |
+| Appeals (v0.2) | **Real, through GenLayer** | The losing side of a provisional ruling can appeal once; the protocol asks the network whether the decision is still appealable, pays the bond it quotes (`appealTransaction`), and follows the same transaction until it is final — `UPHELD` or `REVISED`. The bond is paid by the protocol's key in this release |
+| Graduated remedies (v0.2) | **Real; needs the v2 contract** | Agreements can lock in `graduated_refund`. The contract may then rule `SPLIT` with a refund in 10-point steps; validators must agree on materiality and violated terms exactly, and on the amount within one step. Settlement splits escrow in two exact legs |
 | Consensus v0.6 fees | **Real, and quoted** | Every write carries a fee distribution and its quoted value, produced by `@genlayer/transaction-kit` from a measured profile (when one is committed) plus the network's live prices — and submitted unchanged. A quote that disagrees with the live fee policy is refused, not signed. The deposit the protocol escrowed is recorded as a deposit; consumption and refund are shown only when a receipt reports them, otherwise `NOT AVAILABLE` |
 | Agent authentication | **Real cryptography** | Writes require a secp256k1 request signature. Handles are bound to keys in a persistent registry — pre-registered, or trust-on-first-use. Wrong party, forged, tampered, stale and replayed requests are all rejected |
 | x402 payment authorization | **Real cryptography** | EIP-712 signature over an EIP-3009 `TransferWithAuthorization`, verified by signer recovery; replay, tampering and expiry rejected. The v2 wire format is implemented directly against the spec with `viem` — there is no `@x402/*` SDK dependency, so read `integrations/x402/rail.ts` rather than trusting a package name |
@@ -101,10 +113,15 @@ One brief. One dollar. Five conditions.
 merchant. No adjudication, because arithmetic settled it. ~2 seconds.
 
 **Promise breached** → two sources arrive. `2 < 5` is detected in code, the buyer opens a
-claim, the contested terms go to GenLayer, validators rule `BUYER_WINS`, and the dollar goes
-back. ~30 seconds, because consensus takes as long as it takes.
+claim, the contested terms go to GenLayer, validators reach a *provisional* `BUYER_WINS`, the
+appeal window passes (or the merchant appeals from the console), the ruling finalizes, and the
+dollar goes back. Consensus plus the finality window take as long as they take.
 
-Both paths write real records you can open at `/orders/[id]` afterwards.
+**Partial delivery** → three of five sources, under an agreement that allows a graduated remedy.
+GenLayer can award part of the price back — say 40% — and escrow settles in two legs: $0.40 to
+the buyer, $0.60 to the merchant.
+
+Every path writes real records you can open at `/orders/[id]` afterwards.
 
 ---
 
@@ -133,7 +150,15 @@ the same decision and materiality finding, then confirms the ruling is internall
 stays inside the terms actually in contention. A ruling that says "the buyer wins, pay the
 merchant" is rejected on both sides of the wire.
 
-Contract: [`contracts/recourse_adjudicator.py`](contracts/recourse_adjudicator.py)
+**An accepted ruling is not a final one.** GenLayer reports a transaction `ACCEPTED` when its
+validators agree, but until the finality window closes the result can be appealed — a larger
+committee re-runs the validator function — and recomputed. Recourse therefore treats `ACCEPTED`
+as a provisional ruling, lets the losing side appeal it, and settles only on `FINALIZED`. Graduated
+remedies use the same machinery: "was there a breach" must match exactly between validators;
+"how much of the price" may differ by one 10-point step.
+
+Contract: [`contracts/recourse_adjudicator.py`](contracts/recourse_adjudicator.py) — v2. Tested in
+genlayer-test Direct Mode: [`tests/contracts/`](tests/contracts/).
 
 ---
 
@@ -198,9 +223,15 @@ const { order } = await recourse.createProtectedPurchase({
 // ...merchant delivers, buyer is unhappy...
 const { dispute } = await recourse.openDispute(order.id, { claim: "Two of five sources." });
 await recourse.submitAdjudication(dispute.id);
-const adjudication = await recourse.awaitRuling(dispute.id);
-if (adjudication.ruling?.decision === "BUYER_WINS") await recourse.settle(order.id);
+
+const provisional = await recourse.awaitDecision(dispute.id); // DECIDED: appealable
+// the losing side may call recourse.appeal(dispute.id, { reason }) here
+const final = await recourse.awaitRuling(dispute.id);          // FINALIZED
+await recourse.settle(order.id); // refund, release or split; refused while provisional
 ```
+
+Pass `remedy: "graduated_refund"` to `createProtectedPurchase` to let the forum award a partial
+refund.
 
 [`packages/recourse-sdk/README.md`](packages/recourse-sdk/README.md)
 
@@ -225,6 +256,7 @@ Everything has a working default. Set these only to change where it points.
 | `RECOURSE_STRICT_REGISTRY` | `0` | Set to `1` to refuse any handle that was not pre-registered |
 | `RECOURSE_DEMO_ENDPOINTS` | `1` | Set to `0` to disable the keyless demo endpoints in production |
 | `RECOURSE_STORE_FILE` | `.recourse/ledger.json` | Ledger location |
+| `RECOURSE_AUTO_FINALIZE` | on, except on Studio | Submit `finalizeTransaction` when the finality window has elapsed. Studio finalizes by itself; contract networks wait for someone to. `0` disables, `1` forces |
 
 **Studio Next** (Consensus v0.6, chain 61997) is the default because it is the network the
 hackathon requires. Its sandbox funds an account itself, so a fresh clone can run the full

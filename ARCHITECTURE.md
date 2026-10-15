@@ -45,19 +45,37 @@ The primary object is an order, and its life is a state machine with no illegal 
 OFFERED → ACCEPTED → ESCROWED → DELIVERED → VERIFICATION_PENDING ─┬─→ FULFILLED → RELEASED
                                                                   │
                                                                   └─→ DISPUTED → ADJUDICATING
-                                                                        ├─→ BUYER_WON  → REFUNDED
-                                                                        └─→ MERCHANT_WON → RELEASED
+                                                                                   │
+                                                  ┌──── PROVISIONAL_RULING ◀───────┤  (v0.2)
+                                                  │        │        ▲              │
+                                                  │        ▼        │              │
+                                                  │      APPEALED ──┘              │
+                                                  ▼                                ▼
+                                   ruled on finality only:  BUYER_WON    → REFUNDED
+                                                            MERCHANT_WON → RELEASED
+                                                            SPLIT_AWARDED → PARTIALLY_REFUNDED
 ```
 
-`REFUNDED`, `RELEASED` and `CANCELLED` are terminal: they have **no outgoing edges at all**.
+**v0.2: an accepted ruling is provisional.** GenLayer reports a transaction `ACCEPTED` when
+validators agree, but until its finality window closes the result can be appealed and recomputed.
+So a ruling first lands in `PROVISIONAL_RULING`; an appeal moves it to `APPEALED` and back; and
+the ruled states are entered **only on finality**. There is no edge from `PROVISIONAL_RULING` or
+`APPEALED` to any settlement state, so settling on a ruling that can still change is not merely
+refused by a check — it is unreachable. (`ADJUDICATING` may still go straight to a ruled state,
+because a poll can first see a transaction after its window has already closed.)
+
+`REFUNDED`, `PARTIALLY_REFUNDED`, `RELEASED` and `CANCELLED` are terminal: they have **no
+outgoing edges at all**.
 Double settlement is not prevented by a check that could be forgotten — it is unreachable. The
 `transition()` function is the only way an order's state changes, and it throws
 `INVALID_STATE_TRANSITION` on any edge not in the table.
 
 Every transition appends to an event ledger (`ORDER_CREATED`, `AGREEMENT_LOCKED`,
 `PAYMENT_ESCROWED`, `DELIVERY_POSTED`, `VERIFICATION_STARTED`, `BREACH_DETECTED`,
-`DISPUTE_OPENED`, `ADJUDICATION_SUBMITTED`, `RULING_FINALIZED`, `REFUND_EXECUTED`,
-`MERCHANT_PAID`). The dossier pages render that ledger directly.
+`DISPUTE_OPENED`, `ADJUDICATION_SUBMITTED`, `RULING_PROVISIONAL`, `APPEAL_FILED`,
+`APPEAL_RESOLVED`, `FINALIZATION_SUBMITTED`, `RULING_FINALIZED`, `REFUND_EXECUTED`,
+`PARTIAL_REFUND_EXECUTED`, `MERCHANT_PAID`). `RULING_FINALIZED` is emitted only on true finality.
+The dossier pages render that ledger directly.
 
 ---
 
@@ -65,7 +83,8 @@ Every transition appends to an event ledger (`ORDER_CREATED`, `AGREEMENT_LOCKED`
 
 `domain/agreements/agreement.ts`
 
-An agreement is a versioned document (`recourse/0.1`) canonicalised with sorted keys, no
+An agreement is a versioned document (`recourse/0.2`; `recourse/0.1` documents keep verifying
+against the hashes they were locked with) canonicalised with sorted keys, no
 insignificant whitespace and no floating-point amounts — amounts are decimal strings, always.
 The canonical form is hashed with sha256, so both agents can derive the same hash independently
 from the same JSON.
@@ -125,31 +144,65 @@ question) so it cannot silently regress.
 
 `contracts/recourse_adjudicator.py` · `integrations/genlayer/forum.ts`
 
-The contract stores rulings in a `TreeMap[str, str]` keyed by dispute id and exposes
-`adjudicate(dispute_id, payload_json)` plus `get_ruling(dispute_id)`. The payload carries the
-agreement hash, the evidence hash, the contested terms, the deterministic findings, and the two
-parties' statements framed as untrusted blocks.
+The v2 contract stores each ruling under **`<submitter>/<dispute_id>`**, together with the inputs
+hash it was made against, and exposes `adjudicate(dispute_id, payload_json)`,
+`get_ruling(submitter, dispute_id)`, `get_inputs_hash(submitter, dispute_id)`, `get_policy()` and
+`get_ruling_count()`. The payload carries the agreement hash, the evidence hash, the hash of the
+whole payload, the contested terms, the deterministic findings, the remedy mode the locked
+agreement allows, and the two parties' statements framed as untrusted blocks.
 
-**Validator logic verifies substance.** Inside `gl.vm.run_nondet_unsafe`, each validator:
+*Why the key changed.* v1 keyed rulings by dispute id alone and `adjudicate` was public and
+idempotent, so the first write for an id won. Dispute ids are derived from order numbers
+(`dsp_rc-000042`), which repeat after a reseed and across clones pointed at the shared default
+contract — so the protocol could read a ruling made against inputs it never sent, whether stale or
+deliberately pre-empted. v2 namespaces by sender and refuses a second request for the same key with
+different inputs; the forum additionally checks that the ruling echoes the inputs hash and submitter
+it expects (for v1 contracts, it compares the separately stored inputs hash instead).
 
-1. confirms the leader returned a `gl.vm.Return` carrying an object;
-2. checks cross-field coherence — `BUYER_WINS` requires `material_breach = true` and `REFUND`;
-   `MERCHANT_WINS` requires the opposite; `violated_terms` must be non-empty exactly when
-   `material_breach` is true; every violated term must be one that was actually contested;
-3. **re-runs the judgment itself** with `gl.nondet.exec_prompt` and requires the same decision,
-   the same materiality finding and the same violated-term set.
+**Validator logic verifies substance.** Inside `gl.vm.run_nondet_default` (which already runs the
+validator in a sandbox), each validator:
 
-Prose is expected to differ between validators; the outcome is not. A validator that only asked
-"is this valid JSON?" would be theatre.
+1. votes down a leader that failed, so an incoherent proposal rotates to a fresh leader;
+2. canonicalises the leader's ruling and checks cross-field coherence — `BUYER_WINS` requires a
+   material breach and a full refund; `MERCHANT_WINS` no breach and a release; `SPLIT` a material
+   breach, a refund strictly between 0 and 100%, and a `GRADUATED` agreement; every violated term
+   must be one that was actually contested;
+3. **re-runs the judgment itself** and requires the same materiality finding and violated-term
+   set — and then either the same decision (all-or-nothing) or a refund within
+   `AGREEMENT_TOLERANCE_BPS` = one 10-point step (graduated).
 
-The client re-validates the same invariants on receipt (`parseRuling`), so an incoherent ruling
-can never become actionable even if the contract were replaced.
+Prose is expected to differ between validators; the substance is not. A validator that only asked
+"is this valid JSON?" would be theatre. The client re-validates the same invariants on receipt
+(`parseRuling`), so an incoherent ruling can never become actionable even if the contract were
+replaced.
 
-**What is reported, and only what is reported:** transaction hash, network finality status, and
-per-validator votes exactly as they appear in the receipt. Round counts are not exposed by the
-receipt, so the UI shows `rounds: —` instead of inventing a number. If no contract is deployed,
-`UnavailableForum` refuses to rule and the order stays `ADJUDICATING` with escrow held — an
-unavailable forum is a legitimate protocol state; a fake one is not.
+**Finality and appeals (v0.2).** The forum maps the v0.6 status table (v0.1 carried the v0.5 one,
+under which code 13 — a transaction still being decided — read as a timeout):
+
+| Network | Forum | Protocol |
+| --- | --- | --- |
+| `PENDING`…`REVEALING`, `LEADER_REVEALING`, unknown codes | `PENDING` | waits |
+| `ACCEPTED` | `DECIDED`, ruling read from **latest-nonfinal** state | `PROVISIONAL_RULING`, escrow held |
+| `APPEAL_COMMITTING` / `APPEAL_REVEALING` | `APPEALED` | `APPEALED`, escrow held |
+| `FINALIZED` | `FINALIZED`, ruling read from **latest-final** state | ruled state; settlement allowed |
+| `UNDETERMINED`, timeouts, `CANCELED` | `FAILED` | back to `ADJUDICATING`; resubmittable |
+
+An appeal is GenLayer's own: `canAppeal` → `getAppealCharge` (bond + funding) →
+`appealTransaction` on the **same** transaction, bound to the active decision. The protocol allows
+it only to a party the ruling went against (either party for a split), once per party, one at a
+time. It then decides the appeal is over only on evidence the appeal round actually ran — a round
+seen in flight, a higher round count, another failed appeal, a new decision id, or finality — and
+records it `UPHELD` or `REVISED` by comparing awards. Off Studio, the forum submits
+`finalizeTransaction` itself once the lifecycle reports `Finalize` (`RECOURSE_AUTO_FINALIZE`).
+
+Rulings recorded by v0.1 on acceptance are labelled as such in the UI and re-confirmed on-chain
+(`FINALIZED`, same award) before they can settle.
+
+**What is reported, and only what is reported:** transaction hash, network status, lifecycle
+(decision id, next action), round count when the receipt carries one, and per-validator votes
+exactly as they appear in the receipt. If no contract is deployed, `UnavailableForum` refuses to
+rule and the order stays `ADJUDICATING` with escrow held — an unavailable forum is a legitimate
+protocol state; a fake one is not.
 
 Consensus takes tens of seconds, so submission and polling are separate: `POST` broadcasts and
 returns, `GET` polls. Nothing blocks a request waiting for a network.
@@ -268,10 +321,13 @@ Named so a reviewer does not have to wonder whether they were forgotten:
 - **Key rotation and revocation.** A registered binding can be replaced by an operator via the CLI,
   but there is no signed self-service rotation (prove control of the current key, nominate the
   next) and no revocation list.
-- **Partial refunds.** The ruling type allows only `REFUND` or `RELEASE`. Splits are a settlement
-  concern and would change the `Settlement` entity, not the state machine.
-- **Appeals.** GenLayer exposes `appealTransaction`; the protocol has no `APPEALED` state yet.
-  Adding one means one edge and one event type.
+- **Appellant-funded appeal bonds.** Appeals are real and on-chain, but the bond is paid by the
+  protocol's adjudication key, and a successful appellant's reward accrues to that key. Charging
+  the appellant (or its escrow) needs custody this release does not have.
+- **Leader appeals.** `UNDETERMINED` and timeout outcomes can be appealed on GenLayer; the protocol
+  treats them as failed referrals and lets the dispute be resubmitted instead.
+- **Delivered in v0.2** (formerly listed here): partial refunds — `SPLIT` rulings and two-leg
+  settlement — and appeals with an `APPEALED` state. See [`MILESTONE.md`](MILESTONE.md).
 - **Merchant-initiated disputes.** The domain accepts `openedBy: "MERCHANT"`; no UI drives it.
 - **Multi-item orders and subscriptions.** One agreement, one delivery, one settlement today.
 - **Automatic release timers.** `recourseWindowEndsAt` is persisted and enforced for disputes,
