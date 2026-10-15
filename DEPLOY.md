@@ -106,18 +106,19 @@ is; the app reports it as `DEMO` for exactly that reason rather than over-claimi
 
 ### Current deployment
 
-> These are the **v1** contract's values (the accepted hackathon version). v0.2 needs the v2
-> contract: after `npm run genlayer:deploy`, `genlayer.deployment.json` records the new address
-> and keeps this one under `history`, and the table below should be updated from the runbook.
+> The **v2** contract (Recourse v0.2), deployed and recorded by the GenLayer evidence workflow
+> ([run #1](evidence/run-1.md)). The previous deployment, `0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56`, stays under `history`
+> in `genlayer.deployment.json`, so disputes filed against it are still polled there.
 
 | | |
 | --- | --- |
-| Contract | `0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56` |
+| Contract | `0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581` · RecourseAdjudicator 2.0.0 |
 | Chain | 61997 · Studio Next · `https://studio-dev.genlayer.com/api` |
-| Deploy tx | [`0x69e1be16eb0cd40e3cc029d5938ca3d20ae78dac492445617a71150a15f86a7f`](https://explorer-studio-dev.genlayer.com/tx/0x69e1be16eb0cd40e3cc029d5938ca3d20ae78dac492445617a71150a15f86a7f) |
-| Result | `FINALIZED` · consensus `Accepted` · execution `FINISHED_WITH_RETURN` · 5 validators |
-| Fee | 0.175 GEN deposited, 0.000078 GEN consumed, 0.174921 GEN refunded |
-| Explorer | https://explorer-studio-dev.genlayer.com/address/0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56 |
+| Deploy tx | [`0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3`](https://explorer-studio-dev.genlayer.com/tx/0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3) |
+| Result | `FINALIZED, execution FINISHED_WITH_RETURN` |
+| Runner | `py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng` |
+| Fee deposit | 0.175 GEN |
+| Explorer | https://explorer-studio-dev.genlayer.com/address/0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581 |
 
 The same values live in `genlayer.deployment.json`, which a fresh clone reads by
 default — `GENLAYER_CONTRACT_ADDRESS` is only needed to override them.

@@ -136,8 +136,8 @@ v1 contract pins the rc3–rc7 runner (`5jycge4q…`).
 | Finality-gated settlement | **Done**, tested offline | `tests/v02.test.ts`, SECURITY §14 |
 | Appeals: protocol, forum, API, SDK, UI | **Done**, tested offline against a scripted forum and a fake genlayer-js client | `tests/v02.test.ts`, SECURITY §16 |
 | Contract v2: graduated remedies, binding, policy | **Done**, 28 Direct Mode tests | `tests/contracts/` |
-| v2 contract deployed on Studio Next | **Pending.** RUNBOOK §3 | address / tx: *fill in* |
-| Live adjudication on v2 (all-or-nothing + graduated) | **Pending.** RUNBOOK §4 and §6 | tx: *fill in* |
+| v2 contract deployed on Studio Next | **Done** · [run #1](evidence/run-1.md) | [`0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581`](https://explorer-studio-dev.genlayer.com/address/0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581) · deploy tx [`0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3`](https://explorer-studio-dev.genlayer.com/tx/0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3) |
+| Live adjudication on v2 (all-or-nothing + graduated) | **Done** · [run #1](evidence/run-1.md) | all-or-nothing [`0x576aa265cce7321944cee3ef2515707c8428e7ab93f7186efdc6661695e1844c`](https://explorer-studio-dev.genlayer.com/tx/0x576aa265cce7321944cee3ef2515707c8428e7ab93f7186efdc6661695e1844c) · graduated [`0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85`](https://explorer-studio-dev.genlayer.com/tx/0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85) |
 | Live appeal on v2 | **Pending.** RUNBOOK §5 | tx + appeal charge + outcome: *fill in* |
 | Live app (Railway) on v2 | **Pending.** RUNBOOK §7 | https://recourse-production-bf02.up.railway.app |
 | CI on GitHub | **Green**: lint, types, 96 app tests, 28 contract tests on genlayer-test 0.30.0rc2 + GenVM v0.6.0-rc9 | [run 38734558429](https://github.com/timmyspurs12/recourse/actions/runs/38734558429) |
@@ -153,7 +153,8 @@ v1 contract pins the rc3–rc7 runner (`5jycge4q…`).
   `py-genlayer:babwp9t3…`.
   - [First CI run on this branch](https://github.com/timmyspurs12/recourse/actions/runs/38734558429):
     both jobs green.
-- No on-network claim is made for v2 until the evidence table below is filled.
+- On-network results for v2 come from the GenLayer evidence workflow; each filled row links to the
+  run that produced it, with full logs. Rows still marked **Pending** carry no on-network claim.
 
 **Not claimed.**
 
@@ -164,17 +165,17 @@ v1 contract pins the rc3–rc7 runner (`5jycge4q…`).
   used, and such referrals are resubmitted instead.
 - **Escrow** is still a ledger position, not on-chain custody, as in v0.1.
 
-## Evidence to cite (fill in after running [`RUNBOOK.md`](RUNBOOK.md))
+## Evidence to cite (each value links to the run that printed it)
 
 | Evidence | Value |
 | --- | --- |
-| v2 contract address (Studio Next, chain 61997) | `0x…` |
-| v2 deploy tx · runner pin used | `0x…` · `py-genlayer:…` |
-| `get_policy` read back | `RecourseAdjudicator 2.0.0 · remedy modes ALL_OR_NOTHING, GRADUATED · tolerance 1000 bps` |
-| Smoke: all-or-nothing ruling + prompt-injection refused | tx `0x…` · `RULING: …` |
-| Smoke: graduated ruling | tx `0x…` · `RULING: … refund_bps …` |
+| v2 contract address (Studio Next, chain 61997) | [`0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581`](https://explorer-studio-dev.genlayer.com/address/0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581) · [run #1](evidence/run-1.md) |
+| v2 deploy tx · runner pin used | [`0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3`](https://explorer-studio-dev.genlayer.com/tx/0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3) · `py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng` · [run #1](evidence/run-1.md) |
+| `get_policy` read back | `RecourseAdjudicator 2.0.0 · remedy modes ALL_OR_NOTHING, GRADUATED · tolerance 1000 bps` · [run #1](evidence/run-1.md) |
+| Smoke: all-or-nothing ruling + prompt-injection refused | tx [`0x576aa265cce7321944cee3ef2515707c8428e7ab93f7186efdc6661695e1844c`](https://explorer-studio-dev.genlayer.com/tx/0x576aa265cce7321944cee3ef2515707c8428e7ab93f7186efdc6661695e1844c) · ruling `BUYER_WINS` although the merchant text ordered `MERCHANT_WINS` · [run #1](evidence/run-1.md) |
+| Smoke: graduated ruling | tx [`0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85`](https://explorer-studio-dev.genlayer.com/tx/0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85) · ruling `SPLIT`, `refund_bps 4000` (40% back to the buyer) · [run #1](evidence/run-1.md) |
 | Live appeal | adjudicate tx `0x…` · charge `… GEN` · provisional `…` → final `…` · `UPHELD`/`REVISED` |
-| `npm run test:live` | 3 passed · tx hashes printed by the test |
+| `npm run test:live` | 3 passed, 0 failed · [`0x735dfab4a2a1eeee505b14800fed0a0ff281db1f318f877c9ab8aafc27aa9a32`](https://explorer-studio-dev.genlayer.com/tx/0x735dfab4a2a1eeee505b14800fed0a0ff281db1f318f877c9ab8aafc27aa9a32) · [`0x1ce1bebe276b257ac22f02097c5301fe3c96a019f9b769389b19a1af9c333521`](https://explorer-studio-dev.genlayer.com/tx/0x1ce1bebe276b257ac22f02097c5301fe3c96a019f9b769389b19a1af9c333521) · [`0x599b03500d420af39edaf874eda637251ee2fcdcdbf57041e64288f6115a2d6c`](https://explorer-studio-dev.genlayer.com/tx/0x599b03500d420af39edaf874eda637251ee2fcdcdbf57041e64288f6115a2d6c) · [run #1](evidence/run-1.md) |
 | Live demo on Railway | order `RC-…` (dispute path, provisional → final → refund), order `RC-…` (partial path → split) |
 
 ## Submission text (copy-paste)
@@ -193,7 +194,7 @@ The deploy script negotiates the GenVM runner pin (Studio moved to rc9 on 2026-1
 **Why it matters:** A chargeback layer must not pay out before the verdict is final, a model's
 judgment must be contestable, and partial delivery should get a partial remedy.
 
-**Verify:** v2 contract `0x…` (deploy tx `0x…`); live appeal tx `0x…`; CHANGELOG.md and
+**Verify:** v2 contract `0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581` (deploy tx `0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3`); live appeal tx `0x…`; CHANGELOG.md and
 MILESTONE.md in the repo; tests: 96 app tests and 28 contract tests (genlayer-test Direct Mode).
 
 ## How a reviewer can verify
