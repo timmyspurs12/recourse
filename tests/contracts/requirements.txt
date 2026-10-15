@@ -1,0 +1,7 @@
+# Contract tests for contracts/recourse_adjudicator.py (genlayer-test Direct Mode).
+# Python >= 3.12 is required by genlayer-test.
+#
+#   python3 -m pip install -r tests/contracts/requirements.txt
+#   python3 -m pytest tests/contracts -q
+genlayer-test==0.30.0rc2
+pytest>=8

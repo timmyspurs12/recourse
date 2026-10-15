@@ -48,6 +48,7 @@ next-env.d.ts
 # Local GenLayer deployment record (the committed default is genlayer.deployment.json)
 /.recourse/genlayer.json
 
-# python bytecode from contract lint/validation runs
+# python bytecode and caches from contract lint/validation/test runs
 __pycache__/
 *.pyc
+.pytest_cache/
