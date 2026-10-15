@@ -37,6 +37,26 @@ export function SettlementReceipt({
     );
   }
 
+  if (settlement.status === "PENDING") {
+    // A provisional ruling: the money has a destination but may not move yet.
+    return (
+      <ProtocolErrorState
+        tone="pending"
+        code="HELD_PENDING_FINALITY"
+        title="Escrow held until the ruling is final"
+        description={
+          settlement.outcome === "PARTIAL_REFUND"
+            ? `The provisional ruling would return ${settlement.refundPercent ?? "part"}% of the escrow to the buyer and release the rest.`
+            : settlement.outcome === "REFUNDED"
+              ? "The provisional ruling would refund the buyer in full."
+              : "The provisional ruling would release the escrow to the merchant."
+        }
+        detail={settlement.unavailableReason}
+        className={className}
+      />
+    );
+  }
+
   if (settlement.status === "UNAVAILABLE") {
     return (
       <ProtocolErrorState
@@ -50,6 +70,7 @@ export function SettlementReceipt({
   }
 
   const refunded = settlement.outcome === "REFUNDED" || settlement.outcome === "PARTIAL_REFUND";
+  const partial = settlement.outcome === "PARTIAL_REFUND";
   const accent = refunded ? "text-protected" : "text-pass";
 
   return (
@@ -83,10 +104,23 @@ export function SettlementReceipt({
       <dl className="divide-y divide-line">
         <ReceiptRow label="Buyer" value={buyer.handle} />
         <ReceiptRow label="Merchant" value={merchant.handle} />
-        <ReceiptRow
-          label="Direction"
-          value={refunded ? `${merchant.handle} → ${buyer.handle}` : `${buyer.handle} → ${merchant.handle}`}
-        />
+        {partial && settlement.legs ? (
+          settlement.legs.map((leg) => (
+            <ReceiptRow
+              key={leg.party}
+              label={leg.party === "BUYER" ? "Refund to buyer" : "Release to merchant"}
+              value={`escrow → ${leg.to} · $${leg.amount.amount} ${leg.amount.currency}`}
+            />
+          ))
+        ) : (
+          <ReceiptRow
+            label="Direction"
+            value={refunded ? `${merchant.handle} → ${buyer.handle}` : `${buyer.handle} → ${merchant.handle}`}
+          />
+        )}
+        {partial && typeof settlement.refundPercent === "number" ? (
+          <ReceiptRow label="Refund share" value={`${settlement.refundPercent}% of escrow, rounded down to the micro-unit`} />
+        ) : null}
         <ReceiptRow label="Reason" value={settlement.reason} />
         {disputeRef ? <ReceiptRow label="Dispute" value={disputeRef} /> : null}
         <div className="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">

@@ -1,6 +1,6 @@
 {
   "name": "recourse",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,10 +9,12 @@
     "lint": "eslint",
     "seed": "tsx server/seed.ts",
     "seed:fast": "tsx server/seed.ts --fast",
-    "test": "tsx --test tests/lifecycle.test.ts tests/security.test.ts tests/auth.test.ts tests/genlayer.test.ts",
+    "test": "tsx --test tests/lifecycle.test.ts tests/security.test.ts tests/auth.test.ts tests/genlayer.test.ts tests/v02.test.ts",
+    "test:contract": "python3 -m pytest tests/contracts -q",
     "test:live": "RECOURSE_LIVE=1 tsx --test --test-timeout=600000 tests/genlayer.live.test.ts",
     "genlayer:deploy": "tsx scripts/genlayer-deploy.mts",
     "genlayer:smoke": "tsx scripts/genlayer-smoke.mts",
+    "genlayer:appeal": "tsx scripts/genlayer-appeal.mts",
     "agents": "tsx server/agents.ts",
     "agents:register": "tsx server/agents.ts register",
     "wallet": "node scripts/new-wallet.mjs"

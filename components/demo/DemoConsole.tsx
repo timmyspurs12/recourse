@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Loader2, RotateCcw } from "lucide-react";
+import { ArrowRight, Gavel, Loader2, RotateCcw } from "lucide-react";
 import type { OrderDossier } from "@/lib/types";
 import { promiseProofRows, railNodes } from "@/lib/selectors";
 import { Panel, PanelHeader } from "@/components/system/Panel";
@@ -20,7 +20,7 @@ import { TransactionEventStream } from "@/components/protocol/TransactionEvents"
 import { EvidencePanel } from "@/components/protocol/EvidencePanel";
 import { usePrefersReducedMotion } from "@/lib/hooks/usePrefersReducedMotion";
 
-type Path = "SUCCESS" | "DISPUTE";
+type Path = "SUCCESS" | "DISPUTE" | "PARTIAL";
 
 interface RunResponse {
   path: Path;
@@ -38,6 +38,11 @@ const PATHS: Array<{ id: Path; label: string; note: string }> = [
     id: "DISPUTE",
     label: "Promise breached",
     note: "Merchant delivers 2 of 5 required sources",
+  },
+  {
+    id: "PARTIAL",
+    label: "Partial delivery",
+    note: "3 of 5 sources, graduated agreement",
   },
   {
     id: "SUCCESS",
@@ -58,7 +63,23 @@ const PREVIEW_TERMS = [
 /** Poll cadence while GenLayer validators reach consensus. */
 const WAIT_INTERVAL_MS = 4_000;
 const STEP_INTERVAL_MS = 900;
-const MAX_WAIT_MS = 300_000;
+/** Consensus, the finality window and a possible appeal round, end to end. */
+const MAX_WAIT_MS = 600_000;
+
+const WAITING_COPY: Partial<Record<string, { label: string; body: string }>> = {
+  ADJUDICATING: {
+    label: "Awaiting consensus",
+    body: "The adjudication transaction is on the network. Validators are ruling independently; this panel updates when they reach consensus.",
+  },
+  PROVISIONAL_RULING: {
+    label: "Provisional — awaiting finality",
+    body: "GenLayer accepted a ruling, but it can still be appealed until the finality window closes. Escrow stays held; nothing settles on a provisional ruling.",
+  },
+  APPEALED: {
+    label: "Appeal in progress",
+    body: "A larger validator committee is re-running the judgment. If its majority disagrees, the ruling is recomputed. Escrow stays held.",
+  },
+};
 
 /**
  * DemoConsole — a live protected purchase.
@@ -81,6 +102,7 @@ export function DemoConsole({
   const [waiting, setWaiting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
+  const [appealing, setAppealing] = useState(false);
   const cancelled = useRef(false);
   const reducedMotion = usePrefersReducedMotion();
 
@@ -124,8 +146,7 @@ export function DemoConsole({
         if (Date.now() - startedAt > MAX_WAIT_MS) {
           setError({
             code: "ADJUDICATION_PENDING",
-            message:
-              "Adjudication has not reached consensus within the demo window. The order remains ADJUDICATING; escrow stays held.",
+            message: `GenLayer has not finalized a ruling within the demo window. The order remains ${state.dossier.order.status}; escrow stays held.`,
           });
           break;
         }
@@ -154,6 +175,26 @@ export function DemoConsole({
     }
   }, [path, post]);
 
+  /*
+   * Appeal the provisional ruling on behalf of the side it went against. The
+   * run loop keeps polling in the background; the server's state is the only
+   * source of truth, so the two never need to coordinate.
+   */
+  const appeal = useCallback(async () => {
+    if (!dossier) return;
+    setAppealing(true);
+    setError(null);
+    try {
+      const state = await post("/api/demo/appeal", { orderId: dossier.order.id });
+      setDossier(state.dossier);
+    } catch (caught) {
+      const failure = caught as Error & { code?: string };
+      setError({ code: failure.code ?? "INTERNAL", message: failure.message });
+    } finally {
+      setAppealing(false);
+    }
+  }, [dossier, post]);
+
   const reset = useCallback(() => {
     cancelled.current = true;
     setDossier(null);
@@ -179,6 +220,14 @@ export function DemoConsole({
     dossier?.dispute && dossier.verification ? 1 : 0;
   const nodes = dossier ? railNodes(dossier) : [];
   const adjudication = dossier?.dispute?.adjudication ?? null;
+  const ruling = dossier?.dispute?.ruling ?? null;
+  const canAppeal =
+    dossier?.order.status === "PROVISIONAL_RULING" &&
+    ruling !== null &&
+    !(adjudication?.appeals ?? []).some((entry) => entry.outcome === "PENDING") &&
+    (adjudication?.appeals?.length ?? 0) < (ruling.outcome === "SPLIT" ? 2 : 1);
+  const appellant = ruling?.outcome === "MERCHANT_WINS" ? "buyer" : "merchant";
+  const waitingCopy = dossier ? WAITING_COPY[dossier.order.status] : undefined;
   const requiredSources = dossier?.agreement.terms.find((t) => t.id === "minimum_sources");
   const requiredAge = dossier?.agreement.terms.find((t) => t.id === "max_source_age_days");
 
@@ -332,6 +381,12 @@ export function DemoConsole({
                 Four of these are settled by arithmetic inside the protocol. Only the last one can
                 ever reach GenLayer, and only when a party contests it.
               </p>
+              <p className="mt-3 max-w-2xl text-xs leading-relaxed text-fg-dim">
+                {path === "PARTIAL"
+                  ? "This run's agreement allows a graduated remedy: when a breach is real but partial, GenLayer may award part of the price back, in 10-point steps, and escrow settles in two legs."
+                  : "Remedy: all-or-nothing. A material breach refunds the buyer in full; anything less releases escrow to the merchant."}{" "}
+                Either way, a ruling is provisional — and appealable — until GenLayer finalizes it.
+              </p>
             </div>
           </div>
         </Panel>
@@ -365,13 +420,27 @@ export function DemoConsole({
                   </p>
                 ) : null}
               </div>
-              {waiting ? (
+              {waiting && waitingCopy ? (
                 <div className="border-t border-line bg-pending-dim px-5 py-4 sm:px-6">
-                  <p className="mono-label text-pending">Awaiting consensus</p>
+                  <p className="mono-label text-pending">{waitingCopy.label}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-fg-muted">{waitingCopy.body}</p>
+                </div>
+              ) : null}
+              {canAppeal ? (
+                <div className="border-t border-line px-5 py-4 sm:px-6">
+                  <p className="mono-label">Appeal window open</p>
                   <p className="mt-2 text-xs leading-relaxed text-fg-muted">
-                    The adjudication transaction is on the network. Validators are ruling
-                    independently; this panel updates when the receipt finalizes.
+                    The ruling went against the {appellant}. Appealing asks GenLayer to re-run the
+                    judgment with a larger committee; the network quotes the bond.
                   </p>
+                  <ActionButton variant="secondary" onClick={appeal} disabled={appealing} className="mt-3">
+                    {appealing ? (
+                      <Loader2 className={`h-3.5 w-3.5 ${reducedMotion ? "" : "animate-spin"}`} aria-hidden />
+                    ) : (
+                      <Gavel className="h-3.5 w-3.5" aria-hidden />
+                    )}
+                    Appeal as the {appellant}
+                  </ActionButton>
                 </div>
               ) : null}
               {done ? (
@@ -434,12 +503,16 @@ export function DemoConsole({
                   <p className="mono-label text-fg-dim">
                     {dossier.settlement.outcome === "REFUNDED"
                       ? "Promise breached"
-                      : "Promise satisfied"}
+                      : dossier.settlement.outcome === "PARTIAL_REFUND"
+                        ? "Promise partly kept"
+                        : "Promise satisfied"}
                   </p>
                   <p className="mt-3 text-lg leading-snug text-fg">
                     {dossier.settlement.outcome === "REFUNDED"
                       ? "The buyer got their money back without a support ticket, a human reviewer or a card network."
-                      : "The merchant was paid the moment the promise was proven. Recourse is not a tax on honest sellers."}
+                      : dossier.settlement.outcome === "PARTIAL_REFUND"
+                        ? `The buyer got back the ${dossier.settlement.refundPercent ?? ""}% it did not receive, and the merchant was paid for what it did deliver.`
+                        : "The merchant was paid the moment the promise was proven. Recourse is not a tax on honest sellers."}
                   </p>
                   {adjudication?.transaction.value ? (
                     <div className="mt-4">

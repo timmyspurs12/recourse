@@ -2,6 +2,43 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { GenLayerForum } from "../integrations/genlayer/forum";
 import { loadGenLayerConfig } from "../integrations/genlayer/config";
+import { documentHash, type Json } from "../domain/shared/canonical";
+import { refundBpsOf } from "../domain/model";
+import type { AdjudicationOutcome, AdjudicationRequest } from "../domain/ports";
+
+/**
+ * Submits one adjudication through the production adapter and follows it to
+ * finality — v0.2 finality: FINALIZED, read from finalized state. Returns the
+ * final outcome and whether a provisional (DECIDED) ruling was seen first.
+ */
+async function adjudicateToFinality(forum: GenLayerForum, request: AdjudicationRequest) {
+  const submitted = await forum.submit(request);
+  assert.equal(submitted.status, "SUBMITTED", submitted.failureReason ?? "submission failed");
+  assert.match(submitted.transactionHash!, /^0x[0-9a-f]{64}$/i);
+
+  const input = {
+    disputeId: request.disputeId,
+    transactionHash: submitted.transactionHash!,
+    submitter: submitted.submitter ?? null,
+    inputsHash: documentHash(request.payload as unknown as Json),
+    contractVersion: null as number | null,
+  };
+  const deadline = Date.now() + 420_000;
+  let outcome: AdjudicationOutcome = submitted;
+  let sawProvisional = false;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    outcome = await forum.poll(input);
+    input.contractVersion = outcome.contractVersion ?? input.contractVersion;
+    if (outcome.status === "DECIDED") sawProvisional = true;
+    if (outcome.status === "FINALIZED" || outcome.status === "FAILED") break;
+  }
+  console.log(
+    `  ${request.disputeId}: ${outcome.status} · tx ${submitted.transactionHash} · ` +
+      `provisional ruling observed first: ${sawProvisional}`,
+  );
+  return { outcome, sawProvisional };
+}
 
 /**
  * LIVE NETWORK TEST.
@@ -26,7 +63,7 @@ test(
     const forum = new GenLayerForum(config);
     const disputeId = `dsp_live_${Date.now()}`;
 
-    const submitted = await forum.submit({
+    const { outcome } = await adjudicateToFinality(forum, {
       disputeId,
       orderId: "RC-LIVE",
       question: "Is the shortfall a material breach?",
@@ -50,17 +87,6 @@ test(
         buyerClaim: "I required five independent sources to size a market entry. Two arrived.",
       },
     });
-
-    assert.equal(submitted.status, "SUBMITTED");
-    assert.match(submitted.transactionHash!, /^0x[0-9a-f]{64}$/i);
-
-    const deadline = Date.now() + 300_000;
-    let outcome = submitted;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      outcome = await forum.poll({ disputeId, transactionHash: submitted.transactionHash! });
-      if (outcome.status === "FINALIZED" || outcome.status === "FAILED") break;
-    }
 
     assert.equal(outcome.status, "FINALIZED", outcome.failureReason ?? "did not finalize");
     assert.equal(outcome.ruling?.decision, "BUYER_WINS");
@@ -86,7 +112,7 @@ test(
     const forum = new GenLayerForum(config);
     const disputeId = `dsp_live_ok_${Date.now()}`;
 
-    const submitted = await forum.submit({
+    const { outcome } = await adjudicateToFinality(forum, {
       disputeId,
       orderId: "RC-LIVE-OK",
       question: "Is the shortfall a material breach?",
@@ -116,20 +142,63 @@ test(
       },
     });
 
-    assert.equal(submitted.status, "SUBMITTED");
-
-    const deadline = Date.now() + 300_000;
-    let outcome = submitted;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      outcome = await forum.poll({ disputeId, transactionHash: submitted.transactionHash! });
-      if (outcome.status === "FINALIZED" || outcome.status === "FAILED") break;
-    }
-
     assert.equal(outcome.status, "FINALIZED", outcome.failureReason ?? "did not finalize");
     assert.equal(outcome.ruling?.decision, "MERCHANT_WINS");
     assert.equal(outcome.ruling?.materialBreach, false);
     assert.equal(outcome.ruling?.recommendedSettlement, "RELEASE");
     assert.deepEqual(outcome.ruling?.violatedTerms, []);
+  },
+);
+
+test(
+  "GenLayer awards a proportional remedy under a graduated agreement (v2 contract)",
+  { skip: live ? false : "set RECOURSE_LIVE=1 to run against the network" },
+  async () => {
+    /*
+     * The graduated case: a real shortfall on a counted term (3 of 5 sources),
+     * under an agreement that allows a partial refund. The exact percentage is
+     * the validators' judgment, so the test asserts the shape of a coherent
+     * graduated ruling rather than a number.
+     */
+    const config = loadGenLayerConfig();
+    assert.ok(config.contractAddress, "deploy the adjudicator first: npm run genlayer:deploy");
+
+    const forum = new GenLayerForum(config);
+    assert.ok(
+      (await forum.contractVersion(config.contractAddress!)) === 2,
+      "graduated remedies need the v2 contract: redeploy with npm run genlayer:deploy",
+    );
+
+    const { outcome } = await adjudicateToFinality(forum, {
+      disputeId: `dsp_live_split_${Date.now()}`,
+      orderId: "RC-LIVE-SPLIT",
+      question: "Is the shortfall material, and what share of the price was not delivered?",
+      payload: {
+        agreementHash: `0x${"55".repeat(32)}`,
+        evidenceHash: `0x${"66".repeat(32)}`,
+        contestedTerms: [
+          { id: "minimum_sources", label: "Minimum sources", operator: "GTE", expected: "5", mandatory: true },
+        ],
+        deterministicFindings: [
+          { termId: "minimum_sources", expression: "3 < 5", result: "BREACH" },
+          { termId: "geography", expression: "Lagos = Lagos", result: "PASS" },
+          { termId: "required_sections", expression: "4 = 4", result: "PASS" },
+        ],
+        merchantStatement:
+          "Three strong, independent sources were delivered within the window; all four sections are present.",
+        buyerClaim:
+          "Five independent sources were required to size a market entry. Three arrived: the brief is usable but thinner than I paid for.",
+        remedyMode: "GRADUATED",
+      },
+    });
+
+    assert.equal(outcome.status, "FINALIZED", outcome.failureReason ?? "did not finalize");
+    const ruling = outcome.ruling!;
+    assert.equal(ruling.schema, "recourse.ruling/2");
+    assert.equal(ruling.remedyMode, "GRADUATED");
+    assert.notEqual(ruling.decision, "MERCHANT_WINS", "a counted shortfall is a breach");
+    assert.equal(refundBpsOf(ruling) % 1000, 0, "refunds come in 10-point steps");
+    assert.ok(refundBpsOf(ruling) >= 1000 && refundBpsOf(ruling) <= 10_000);
+    console.log(`  ruling: ${ruling.decision} · refund ${refundBpsOf(ruling) / 100}% · ${ruling.reasoningSummary}`);
   },
 );

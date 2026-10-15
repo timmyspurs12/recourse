@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       terms: input.terms,
       deliveryDeadlineHours: input.deliveryDeadlineHours,
       recourseWindowHours: input.recourseWindowHours,
+      remedy: input.remedy,
       deferFunding: input.deferFunding,
       authorization: input.payment,
     });

@@ -67,8 +67,8 @@ export const LIFECYCLE: LifecycleStep[] = [
     actor: "GenLayer",
     summary: "Contested fulfillment is referred to GenLayer.",
     detail:
-      "Only genuinely semantic questions — materiality, interpretation, scope — leave the protocol. GenLayer receives the locked agreement, the evidence and one precise question.",
-    artifacts: ["Adjudication question", "Submitted inputs", "Ruling", "Reasoning"],
+      "Only genuinely semantic questions — materiality, interpretation, scope — leave the protocol. GenLayer receives the locked agreement, the evidence and one precise question. Its first answer is provisional: until the finality window closes, the losing side can appeal and a larger validator committee re-runs the judgment.",
+    artifacts: ["Adjudication question", "Provisional ruling", "Appeal round", "Final ruling"],
     phase: "JUDGMENT",
   },
   {
@@ -76,10 +76,10 @@ export const LIFECYCLE: LifecycleStep[] = [
     index: "06",
     title: "SETTLE",
     actor: "Recourse",
-    summary: "Funds are released or refunded.",
+    summary: "Funds are released, refunded — or split.",
     detail:
-      "The ruling becomes an economic outcome. A satisfied promise releases escrow to the merchant; a material breach returns it to the buyer. Either way the transaction ends in a receipt.",
-    artifacts: ["Settlement receipt", "Outcome", "Settlement transaction"],
+      "Only a final ruling becomes an economic outcome. A satisfied promise releases escrow to the merchant; a material breach returns it to the buyer; under a graduated agreement a partial breach splits it, to the micro-unit. Every path ends in a receipt.",
+    artifacts: ["Settlement receipt", "Settlement legs", "Settlement transaction"],
     phase: "SETTLEMENT",
   },
 ];

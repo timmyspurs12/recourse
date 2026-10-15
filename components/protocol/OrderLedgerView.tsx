@@ -23,9 +23,20 @@ const FILTERS: Array<{ id: Filter; label: string; match: (status: OrderStatus) =
   {
     id: "CONTESTED",
     label: "Contested",
-    match: (s) => s === "DISPUTED" || s === "ADJUDICATING" || s === "BUYER_WON" || s === "MERCHANT_WON",
+    match: (s) =>
+      s === "DISPUTED" ||
+      s === "ADJUDICATING" ||
+      s === "PROVISIONAL_RULING" ||
+      s === "APPEALED" ||
+      s === "BUYER_WON" ||
+      s === "MERCHANT_WON" ||
+      s === "SPLIT_AWARDED",
   },
-  { id: "SETTLED", label: "Settled", match: (s) => s === "RELEASED" || s === "REFUNDED" },
+  {
+    id: "SETTLED",
+    label: "Settled",
+    match: (s) => s === "RELEASED" || s === "REFUNDED" || s === "PARTIALLY_REFUNDED",
+  },
 ];
 
 /**

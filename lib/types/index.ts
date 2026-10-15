@@ -83,9 +83,13 @@ export const ORDER_STATUSES = [
   "RELEASED",
   "DISPUTED",
   "ADJUDICATING",
+  "PROVISIONAL_RULING",
+  "APPEALED",
   "BUYER_WON",
   "MERCHANT_WON",
+  "SPLIT_AWARDED",
   "REFUNDED",
+  "PARTIALLY_REFUNDED",
   "CANCELLED",
 ] as const;
 
@@ -148,7 +152,7 @@ export interface Agreement {
 
 export type PaymentRail = "x402";
 
-export type EscrowState = "NONE" | "HELD" | "RELEASED" | "REFUNDED";
+export type EscrowState = "NONE" | "HELD" | "RELEASED" | "REFUNDED" | "SPLIT";
 
 export interface Payment {
   id: string;
@@ -264,8 +268,37 @@ export type AdjudicationStatus =
   | "NOT_SUBMITTED"
   | "QUEUED"
   | "IN_PROGRESS"
+  /** Ruled, but still appealable until GenLayer finalizes it. */
+  | "PROVISIONAL"
+  /** An appeal round is re-running consensus on the provisional ruling. */
+  | "APPEALED"
   | "FINALIZED"
   | "UNAVAILABLE";
+
+/**
+ * How final a ruling is.
+ *
+ * LEGACY_ACCEPTANCE labels rulings recorded by v0.1 of the protocol, which
+ * treated an ACCEPTED transaction as final. They are shown as what they are
+ * rather than silently upgraded.
+ */
+export type FinalityState = "PROVISIONAL" | "FINAL" | "LEGACY_ACCEPTANCE";
+
+export interface AppealView {
+  id: string;
+  requestedBy: "BUYER" | "MERCHANT";
+  handle: string;
+  reason: string;
+  filedAt: string;
+  /** Bond plus appeal funding, as quoted by the network. */
+  charge: Attested<string>;
+  paidBy: string | null;
+  outcome: "PENDING" | "UPHELD" | "REVISED";
+  /** The award under appeal, e.g. "BUYER_WINS (full refund)". */
+  before: string;
+  after: string | null;
+  resolvedAt: string | null;
+}
 
 export interface AdjudicationInput {
   label: string;
@@ -323,6 +356,18 @@ export interface Adjudication {
     refunded: string | null;
     source: string;
   }>;
+  /** v0.2: how final the ruling is, and what the network says happens next. */
+  finality?: Attested<{
+    state: FinalityState;
+    label: string;
+    detail: string;
+    networkStatus: string | null;
+    decisionId: string | null;
+    nextAction: string | null;
+  }>;
+  appeals?: AppealView[];
+  remedyMode?: "ALL_OR_NOTHING" | "GRADUATED" | null;
+  contractVersion?: number | null;
 }
 
 export type RulingOutcome = "BUYER_WINS" | "MERCHANT_WINS" | "SPLIT";
@@ -342,6 +387,11 @@ export interface Ruling {
   breachedTerms: BreachedTerm[];
   rationale: string[];
   remedy: Remedy;
+  /** Share of the escrow owed to the buyer: 100 full refund, 0 release. */
+  refundPercent: number;
+  /** False while the ruling can still be appealed. */
+  final: boolean;
+  /** When finalized, or when last decided while provisional. */
   finalizedAt: string;
   provenance: Provenance;
 }
@@ -349,6 +399,12 @@ export interface Ruling {
 export type SettlementOutcome = "RELEASED" | "REFUNDED" | "PARTIAL_REFUND";
 
 export type SettlementStatus = "PENDING" | "CONFIRMED" | "UNAVAILABLE";
+
+export interface SettlementLegView {
+  party: "BUYER" | "MERCHANT";
+  to: string;
+  amount: Money;
+}
 
 export interface Settlement {
   id: string;
@@ -364,6 +420,10 @@ export interface Settlement {
   transaction: Attested<string>;
   /** Set when a ruling exists but settlement confirmation has not arrived. */
   unavailableReason?: string;
+  /** Every movement out of escrow. A partial refund has two. */
+  legs?: SettlementLegView[];
+  /** Share of the escrow returned to the buyer. */
+  refundPercent?: number | null;
 }
 
 export interface Dispute {
@@ -444,11 +504,14 @@ export interface CaseRecord {
   buyerHandle: string;
   merchantHandle: string;
   breachedTermId: string | null;
+  /** The final outcome. Null until GenLayer finalizes the ruling. */
   outcome: RulingOutcome | null;
   settlement: SettlementOutcome | null;
   openedAt: string;
   amount: Money;
   provenance: Provenance;
+  /** Set while a ruling exists but is not final yet. */
+  judgmentStage?: "PROVISIONAL" | "UNDER_APPEAL" | null;
 }
 
 /* ------------------------------------------------------------------ */

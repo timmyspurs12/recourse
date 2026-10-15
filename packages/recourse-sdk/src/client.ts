@@ -21,7 +21,13 @@ import {
  *   const order = await recourse.createProtectedPurchase({ ... });
  *   await recourse.submitDelivery(order.id, { ... });
  *   const dispute = await recourse.openDispute(order.id, { claim });
- *   const ruling = await recourse.awaitRuling(dispute.id);
+ *   await recourse.submitAdjudication(dispute.dispute!.id);
+ *
+ *   // v0.2: a ruling is provisional (appealable) before it is final.
+ *   const provisional = await recourse.awaitDecision(dispute.dispute!.id);
+ *   // …the losing side may appeal while it is provisional:
+ *   // await recourse.appeal(dispute.dispute!.id, { reason: "…" });
+ *   const final = await recourse.awaitRuling(dispute.dispute!.id);
  *   await recourse.settle(order.id);
  */
 
@@ -56,6 +62,12 @@ export interface CreateProtectedPurchaseInput {
   recourseWindowHours?: number;
   /** Leave the order unfunded so it can be paid via the x402 handshake. */
   deferFunding?: boolean;
+  /**
+   * What a breach entitles the buyer to. `graduated_refund` lets GenLayer
+   * award part of the escrow back; it is locked into the agreement before
+   * payment. Defaults to `full_refund` (all-or-nothing).
+   */
+  remedy?: "full_refund" | "graduated_refund";
   /** A signed x402 authorization, when funding immediately. */
   payment?: { scheme: string; network: string; payload: Record<string, unknown> };
 }
@@ -198,14 +210,51 @@ export class RecourseClient {
   }
 
   /**
-   * Polls until the forum reaches finality.
+   * Polls until the forum reaches a ruling — provisional or final.
    *
-   * Consensus takes tens of seconds. This never fabricates progress: if the
-   * timeout is reached the adjudication is still PENDING and the escrow is
-   * still held.
+   * A DECIDED adjudication carries a ruling GenLayer accepted but can still
+   * recompute on appeal. This is the moment the losing side can call
+   * `appeal()`; settlement waits for `awaitRuling`.
+   */
+  async awaitDecision(
+    disputeId: string,
+    options?: { timeoutMs?: number; intervalMs?: number; signal?: AbortSignal },
+  ): Promise<Adjudication> {
+    return this.pollUntil(disputeId, ["DECIDED", "FINALIZED", "FAILED"], options);
+  }
+
+  /**
+   * Polls until the ruling is final (or the referral failed).
+   *
+   * v0.2: FINALIZED means GenLayer finalized the ruling — the appeal window is
+   * closed and settlement can follow it. This never fabricates progress: if
+   * the timeout is reached the adjudication is still pending, provisional or
+   * under appeal, and the escrow is still held.
    */
   async awaitRuling(
     disputeId: string,
+    options?: { timeoutMs?: number; intervalMs?: number; signal?: AbortSignal },
+  ): Promise<Adjudication> {
+    return this.pollUntil(disputeId, ["FINALIZED", "FAILED"], options);
+  }
+
+  /**
+   * Appeals a provisional ruling.
+   *
+   * Only the side the ruling went against may appeal (either side, for a
+   * split), once per party, while GenLayer still allows it. The appellant is
+   * the configured signer — the request must be signed.
+   */
+  async appeal(disputeId: string, input: { reason?: string } = {}): Promise<{ adjudication: Adjudication }> {
+    return this.request<{ adjudication: Adjudication }>(`/api/disputes/${disputeId}/appeal`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  private async pollUntil(
+    disputeId: string,
+    until: Adjudication["status"][],
     options?: { timeoutMs?: number; intervalMs?: number; signal?: AbortSignal },
   ): Promise<Adjudication> {
     const timeoutMs = options?.timeoutMs ?? 300_000;
@@ -214,7 +263,7 @@ export class RecourseClient {
 
     let latest = (await this.getAdjudication(disputeId)).adjudication;
     while (Date.now() < deadline) {
-      if (latest?.status === "FINALIZED" || latest?.status === "FAILED") return latest;
+      if (latest && until.includes(latest.status)) return latest;
       if (options?.signal?.aborted) throw new RecourseError("ABORTED", "Polling aborted", 499);
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
       latest = (await this.getAdjudication(disputeId)).adjudication;
@@ -224,7 +273,10 @@ export class RecourseClient {
 
   /* ------------------------------------------------------------ settlement */
 
-  /** Executes release or refund. Idempotent: safe to retry. */
+  /**
+   * Executes release, refund or — for a split ruling — both legs. Idempotent:
+   * safe to retry. Refused with RULING_NOT_FINAL while a ruling is provisional.
+   */
   async settle(orderId: string): Promise<Dossier> {
     return this.request<Dossier>(`/api/orders/${orderId}/settlement`, { method: "POST" });
   }

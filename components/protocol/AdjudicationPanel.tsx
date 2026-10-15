@@ -5,7 +5,7 @@ import { HashValue } from "@/components/system/HashValue";
 import { UnavailableValue } from "@/components/system/Provenance";
 import { EmptyState } from "@/components/system/States";
 import { ProvenanceTag } from "@/components/system/Provenance";
-import type { Adjudication, Ruling } from "@/lib/types";
+import type { Adjudication, AppealView, Ruling } from "@/lib/types";
 
 /**
  * AdjudicationPanel — the GenLayer referral, stated plainly.
@@ -74,10 +74,16 @@ export function AdjudicationPanel({
             Awaiting ruling
           </p>
           <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">
-            The referral has been submitted. No outcome, transaction, or validator detail is
-            reported until the ruling finalizes.
+            The referral has been submitted. No outcome or validator detail is reported until
+            validators reach consensus.
           </p>
         </div>
+      ) : null}
+
+      {adjudication.finality ? <FinalityBlock finality={adjudication.finality} /> : null}
+
+      {adjudication.appeals && adjudication.appeals.length > 0 ? (
+        <AppealsBlock appeals={adjudication.appeals} />
       ) : null}
 
       <div className="grid grid-cols-1 divide-y divide-line sm:grid-cols-2 sm:divide-x sm:divide-y-0">
@@ -217,6 +223,107 @@ export function AdjudicationPanel({
 }
 
 /**
+ * Finality, stated in the network's terms.
+ *
+ * GenLayer accepts a ruling first and finalizes it later; in between it can be
+ * appealed and recomputed. This block says which of those this ruling is, and
+ * labels records from v0.1 — which settled on acceptance — as exactly that.
+ */
+function FinalityBlock({ finality }: { finality: NonNullable<Adjudication["finality"]> }) {
+  const value = finality.value;
+  const tone =
+    value?.state === "FINAL"
+      ? "border-pass/25 bg-pass-dim/20"
+      : value?.state === "PROVISIONAL"
+        ? "border-pending/25 bg-pending-dim/25"
+        : "border-line bg-surface";
+  return (
+    <div className={cx("border-b px-4 py-4 sm:px-5", tone)}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="mono-label">Finality</p>
+        {value ? (
+          <Tag
+            tone={value.state === "FINAL" ? "pass" : value.state === "PROVISIONAL" ? "pending" : "neutral"}
+            size="xs"
+          >
+            {value.label}
+          </Tag>
+        ) : (
+          <ProvenanceTag provenance={finality.provenance} />
+        )}
+      </div>
+      {value ? (
+        <>
+          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-fg-muted">{value.detail}</p>
+          <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-3">
+            <div>
+              <dt className="mono-label text-fg-faint">Network status</dt>
+              <dd className="mt-1 font-mono text-xs text-fg">{value.networkStatus ?? "not reported"}</dd>
+            </div>
+            <div>
+              <dt className="mono-label text-fg-faint">Decision id</dt>
+              <dd className="mt-1 font-mono text-xs text-fg-muted">{value.decisionId ?? "not reported"}</dd>
+            </div>
+            <div>
+              <dt className="mono-label text-fg-faint">Next network action</dt>
+              <dd className="mt-1 font-mono text-xs text-fg-muted">{value.nextAction ?? "not reported"}</dd>
+            </div>
+          </dl>
+        </>
+      ) : (
+        <div className="mt-2">
+          <UnavailableValue note={finality.note} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Appeals against the provisional ruling, with what the network charged. */
+function AppealsBlock({ appeals }: { appeals: AppealView[] }) {
+  return (
+    <div className="border-b border-line px-4 py-4 sm:px-5">
+      <p className="mono-label">Appeals</p>
+      <ul className="mt-3 divide-y divide-line border border-line">
+        {appeals.map((appeal) => (
+          <li key={appeal.id} className="flex flex-col gap-2 px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-mono text-xs text-fg">
+                {appeal.handle}
+                <span className="ml-2 text-fg-faint">{appeal.requestedBy.toLowerCase()}</span>
+              </span>
+              <Tag
+                tone={appeal.outcome === "PENDING" ? "pending" : appeal.outcome === "REVISED" ? "protected" : "neutral"}
+                size="xs"
+              >
+                {appeal.outcome === "PENDING" ? "In progress" : appeal.outcome}
+              </Tag>
+            </div>
+            <p className="font-mono text-[11px] leading-relaxed text-fg-muted">
+              {appeal.before}
+              {appeal.after ? ` → ${appeal.after}` : ""}
+            </p>
+            {appeal.reason ? (
+              <p className="text-xs leading-relaxed text-fg-dim">&ldquo;{appeal.reason}&rdquo;</p>
+            ) : null}
+            <p className="font-mono text-[10px] tnum text-fg-faint">
+              Filed {formatTimestamp(appeal.filedAt, { seconds: true })} · charge{" "}
+              {appeal.charge.value ?? "not reported"}
+              {appeal.resolvedAt ? ` · resolved ${formatTimestamp(appeal.resolvedAt, { seconds: true })}` : ""}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
+        GenLayer appeals re-run the same transaction with a larger validator committee. The charge is
+        the bond plus appeal funding the network quoted; in this release it is paid by the
+        protocol&apos;s adjudication key.
+      </p>
+    </div>
+  );
+}
+
+/**
  * RulingPanel — the outcome and, critically, the reasoning behind it.
  */
 export function RulingPanel({
@@ -237,11 +344,26 @@ export function RulingPanel({
     );
   }
 
-  const buyerWins = ruling.outcome === "BUYER_WINS";
+  const buyerWins = ruling.outcome === "BUYER_WINS" || ruling.outcome === "SPLIT";
 
   return (
     <Panel className={className}>
-      <PanelHeader title="RULING" meta={formatTimestamp(ruling.finalizedAt, { seconds: true })} />
+      <PanelHeader
+        title={ruling.final ? "RULING" : "PROVISIONAL RULING"}
+        meta={formatTimestamp(ruling.finalizedAt, { seconds: true })}
+      />
+
+      {!ruling.final ? (
+        <div className="border-b border-pending/25 bg-pending-dim/25 px-4 py-3 sm:px-5">
+          <p className="font-mono text-[11px] tracking-[0.14em] text-pending uppercase">
+            Not final — appealable
+          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">
+            GenLayer accepted this ruling, but it can still be appealed and recomputed until the
+            network finalizes it. Escrow stays held until then.
+          </p>
+        </div>
+      ) : null}
 
       <div
         className={cx(
@@ -257,7 +379,11 @@ export function RulingPanel({
               buyerWins ? "text-protected" : "text-pass",
             )}
           >
-            {buyerWins ? "Buyer wins" : ruling.outcome === "MERCHANT_WINS" ? "Merchant wins" : "Split remedy"}
+            {ruling.outcome === "BUYER_WINS"
+              ? "Buyer wins"
+              : ruling.outcome === "MERCHANT_WINS"
+                ? "Merchant wins"
+                : `Split · ${ruling.refundPercent}% refund`}
           </p>
         </div>
         <RulingBadge outcome={ruling.outcome} />
@@ -325,7 +451,7 @@ export function RulingPanel({
           {ruling.remedy === "FULL_REFUND"
             ? "Full refund"
             : ruling.remedy === "PARTIAL_REFUND"
-              ? "Partial refund"
+              ? `Partial refund · ${ruling.refundPercent}% of escrow`
               : "No remedy owed"}
         </p>
       </div>

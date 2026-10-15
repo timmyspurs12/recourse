@@ -114,6 +114,18 @@ export const orderStatusMeta: Record<OrderStatus, StatusMeta> = {
     phase: "JUDGMENT",
     description: "Contested fulfillment referred to GenLayer for semantic judgment.",
   },
+  PROVISIONAL_RULING: {
+    label: "PROVISIONAL RULING",
+    tone: "pending",
+    phase: "JUDGMENT",
+    description: "GenLayer accepted a ruling that can still be appealed. Escrow stays held until it is final.",
+  },
+  APPEALED: {
+    label: "UNDER APPEAL",
+    tone: "pending",
+    phase: "JUDGMENT",
+    description: "A larger GenLayer committee is re-running consensus on the provisional ruling.",
+  },
   BUYER_WON: {
     label: "BUYER WON",
     tone: "protected",
@@ -126,6 +138,12 @@ export const orderStatusMeta: Record<OrderStatus, StatusMeta> = {
     phase: "JUDGMENT",
     description: "Ruling finalized in favour of the merchant agent.",
   },
+  SPLIT_AWARDED: {
+    label: "SPLIT AWARDED",
+    tone: "protected",
+    phase: "JUDGMENT",
+    description: "Ruling finalized with a partial refund to the buyer agent.",
+  },
   CANCELLED: {
     label: "Cancelled",
     tone: "neutral",
@@ -137,6 +155,12 @@ export const orderStatusMeta: Record<OrderStatus, StatusMeta> = {
     tone: "protected",
     phase: "SETTLEMENT",
     description: "Escrowed funds returned to the buyer agent.",
+  },
+  PARTIALLY_REFUNDED: {
+    label: "PARTIALLY REFUNDED",
+    tone: "protected",
+    phase: "SETTLEMENT",
+    description: "Escrow split: part returned to the buyer agent, the rest released to the merchant agent.",
   },
 };
 

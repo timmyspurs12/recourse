@@ -131,3 +131,34 @@ export const SHORT_DELIVERY = {
 
 export const BUYER_CLAIM =
   "The agreement required at least five independent sources because this brief sizes a market entry. Two were supplied. The corroboration I paid for is not present.";
+
+/**
+ * A delivery that is short, but not empty: three of the five sources.
+ *
+ * This is the case all-or-nothing remedies handle badly. Refunding everything
+ * pays the buyer for value it received; refunding nothing charges it for value
+ * it did not. Under a graduated agreement the forum can award the difference.
+ */
+export const PARTIAL_DELIVERY = {
+  statement:
+    "Brief delivered in JSON. Lagos-scoped with all four sections, corroborated across three independent sources within the window. Two further sources could not be secured before the deadline.",
+  artifactHash: `0x${"c9".repeat(32)}`,
+  artifactUrl: "https://kestrel.example/briefs/lagos-consumer-commerce-three-sources.json",
+  assertions: {
+    sourceCount: 3,
+    geography: "Lagos, Nigeria",
+    sectionCount: 4,
+    maxSourceAgeDays: 12,
+    format: "JSON",
+    summary:
+      "Consumer demand, pricing bands, channel mix and competitive set for Lagos, corroborated across three sources.",
+  },
+  evidence: [
+    { kind: "survey", source: "Lagos Household Consumption Panel, wave 42", sourceAgeDays: 9 },
+    { kind: "registry", source: "Nigeria Bureau of Statistics retail index", sourceAgeDays: 12 },
+    { kind: "pricing", source: "Kestrel Lagos price sweep, 61 SKUs", sourceAgeDays: 4 },
+  ],
+} as const;
+
+export const PARTIAL_CLAIM =
+  "The agreement required five independent sources to size a market entry; three were supplied. The brief is usable, but its sizing rests on less corroboration than I paid for. I am asking for the share of the price that was not delivered.";

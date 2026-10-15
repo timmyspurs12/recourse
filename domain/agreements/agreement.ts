@@ -4,7 +4,10 @@ import type {
   AgreementTerm,
   Currency,
   RefundPolicy,
+  RemedyMode,
+  RemedyPolicy,
 } from "../model";
+import { AGREEMENT_VERSION, REMEDY_POLICIES } from "../model";
 import { canonicalize, documentHash, hashEquals, type Json } from "../shared/canonical";
 import { newAgreementId } from "../shared/ids";
 import { fail } from "../shared/errors";
@@ -20,6 +23,8 @@ export interface DraftAgreementInput {
   terms: AgreementTerm[];
   deliveryDeadline: string;
   recourseWindowHours: number;
+  /** What a breach entitles the buyer to. Defaults to an all-or-nothing refund. */
+  remedy?: RemedyPolicy;
   createdAt: string;
 }
 
@@ -72,15 +77,19 @@ export function draftAgreement(input: DraftAgreementInput): Agreement {
     fail("AGREEMENT_INVALID", "Recourse window must be positive");
   }
   validateTerms(input.terms);
+  const remedy = input.remedy ?? "full_refund";
+  if (!REMEDY_POLICIES.includes(remedy)) {
+    fail("AGREEMENT_INVALID", `Unknown remedy "${String(remedy)}"; expected ${REMEDY_POLICIES.join(" or ")}`);
+  }
 
   const refundPolicy: RefundPolicy = {
     type: "mandatory_term_breach",
-    settlement: "full_refund",
+    settlement: remedy,
     recourseWindowHours: input.recourseWindowHours,
   };
 
   const document: AgreementDocument = {
-    version: "recourse/0.1",
+    version: AGREEMENT_VERSION,
     orderId: input.orderId,
     buyer: input.buyer,
     merchant: input.merchant,
@@ -99,6 +108,18 @@ export function draftAgreement(input: DraftAgreementInput): Agreement {
     hash: agreementHash(document),
     lockedAt: null,
   };
+}
+
+/**
+ * The remedy mode the forum is allowed to use for this agreement.
+ *
+ * Read from the locked document, never from a request: whether a partial
+ * refund is possible was agreed before payment and is covered by the hash.
+ */
+export function remedyModeFor(agreement: Agreement): RemedyMode {
+  return agreement.document.refundPolicy.settlement === "graduated_refund"
+    ? "GRADUATED"
+    : "ALL_OR_NOTHING";
 }
 
 export function agreementHash(document: AgreementDocument): string {

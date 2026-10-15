@@ -97,10 +97,18 @@ export default async function DisputesPage() {
                         ) : null}
                         {dispute.ruling ? (
                           <Tag
-                            tone={dispute.ruling.outcome === "BUYER_WINS" ? "protected" : "pass"}
+                            tone={
+                              !dispute.ruling.final
+                                ? "pending"
+                                : dispute.ruling.outcome === "MERCHANT_WINS"
+                                  ? "pass"
+                                  : "protected"
+                            }
                             size="xs"
                           >
                             {dispute.ruling.outcome.replace(/_/g, " ")}
+                            {dispute.ruling.outcome === "SPLIT" ? ` ${dispute.ruling.refundPercent}%` : ""}
+                            {dispute.ruling.final ? "" : " · provisional"}
                           </Tag>
                         ) : (
                           <Tag tone="pending" size="xs" dot>

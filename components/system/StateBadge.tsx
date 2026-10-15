@@ -123,14 +123,22 @@ const adjudicationStatusTone: Record<AdjudicationStatus, Tone> = {
   NOT_SUBMITTED: "neutral",
   QUEUED: "pending",
   IN_PROGRESS: "pending",
+  PROVISIONAL: "pending",
+  APPEALED: "pending",
   FINALIZED: "protected",
   UNAVAILABLE: "neutral",
+};
+
+const adjudicationStatusLabel: Partial<Record<AdjudicationStatus, string>> = {
+  PROVISIONAL: "PROVISIONAL RULING",
+  APPEALED: "UNDER APPEAL",
+  FINALIZED: "RULING FINAL",
 };
 
 export function AdjudicationStatusBadge({ status }: { status: AdjudicationStatus }) {
   return (
     <Tag tone={adjudicationStatusTone[status]} dot>
-      {status === "FINALIZED" ? "RULING FINALIZED" : status.replace(/_/g, " ")}
+      {adjudicationStatusLabel[status] ?? status.replace(/_/g, " ")}
     </Tag>
   );
 }

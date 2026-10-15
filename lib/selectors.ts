@@ -82,6 +82,11 @@ const DISPUTE_TAIL: OrderStatus[] = ["DISPUTED", "ADJUDICATING"];
 /**
  * Builds the state path actually taken by this order, including the
  * still-unresolved branch when adjudication has not finalized.
+ *
+ * v0.2: the dispute branch passes through PROVISIONAL_RULING (and APPEALED,
+ * when an appeal was filed) before a ruled state, because an accepted ruling
+ * is not yet a final one. The ruled state follows the *final* outcome; while
+ * the ruling is provisional the tail is projected from it.
  */
 export function railNodes(dossier: OrderDossier): RailNode[] {
   const reached = new Map<OrderStatus, string>();
@@ -90,13 +95,33 @@ export function railNodes(dossier: OrderDossier): RailNode[] {
   }
 
   const disputed = Boolean(dossier.dispute);
-  const outcome = dossier.dispute?.ruling?.outcome ?? null;
+  const ruling = dossier.dispute?.ruling ?? null;
+  const outcome = ruling?.outcome ?? null;
+  const final = ruling?.final ?? false;
 
   const path: OrderStatus[] = [...BASE_PATH];
   if (disputed) {
     path.push(...DISPUTE_TAIL);
+    /*
+     * Only draw the states an order actually passed through. A v0.1 record
+     * went straight from ADJUDICATING to a ruled state on acceptance; showing
+     * it a PROVISIONAL_RULING step it never had would rewrite its history.
+     * While a ruling is still pending, the v0.2 path is projected.
+     */
+    const current = dossier.order.status;
+    const provisional =
+      reached.has("PROVISIONAL_RULING") ||
+      current === "PROVISIONAL_RULING" ||
+      current === "APPEALED" ||
+      !final;
+    if (provisional) path.push("PROVISIONAL_RULING");
+    const appealed =
+      reached.has("APPEALED") ||
+      current === "APPEALED" ||
+      (dossier.dispute?.adjudication?.appeals?.length ?? 0) > 0;
+    if (appealed) path.push("APPEALED");
     if (outcome === "MERCHANT_WINS") path.push("MERCHANT_WON", "RELEASED");
-    else if (outcome === "BUYER_WINS") path.push("BUYER_WON", "REFUNDED");
+    else if (outcome === "SPLIT") path.push("SPLIT_AWARDED", "PARTIALLY_REFUNDED");
     else path.push("BUYER_WON", "REFUNDED");
   } else {
     path.push(...SUCCESS_TAIL);
@@ -110,7 +135,7 @@ export function railNodes(dossier: OrderDossier): RailNode[] {
     let state: RailNodeState;
     if (status === current) state = "CURRENT";
     else if (at) state = "COMPLETE";
-    else if (disputed && !outcome && index > currentIndex) state = "PROJECTED";
+    else if (disputed && !final && index > currentIndex) state = "PROJECTED";
     else state = currentIndex >= 0 && index < currentIndex ? "COMPLETE" : "PENDING";
     return {
       status,
@@ -160,7 +185,12 @@ export function countedEvidence(dossier: OrderDossier): {
 }
 
 export function isTerminal(status: OrderStatus): boolean {
-  return status === "RELEASED" || status === "REFUNDED";
+  return (
+    status === "RELEASED" ||
+    status === "REFUNDED" ||
+    status === "PARTIALLY_REFUNDED" ||
+    status === "CANCELLED"
+  );
 }
 
 /**
