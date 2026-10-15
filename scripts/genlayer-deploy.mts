@@ -4,6 +4,7 @@
  *
  *   npm run genlayer:deploy                                    # Studio Next
  *   npm run genlayer:deploy -- --network testnet-bradbury --key 0x...
+ *   npm run genlayer:deploy -- --pin py-genlayer:<hash>         # force a runner
  *
  * Consensus v0.6 changed three things about deploying, and each one bites
  * silently if it is done the old way:
@@ -31,9 +32,13 @@ import { loadGenLayerConfig } from "../integrations/genlayer/config";
 import { createForumKit, formatGen } from "../integrations/genlayer/fees";
 import { ADJUDICATOR_SOURCE } from "../integrations/genlayer/config";
 import {
+  KNOWN_PY_GENLAYER_RUNNERS,
   STUDIO_NEXT_PY_GENLAYER_PIN,
+  checkRunnerPin,
+  negotiateRunnerPin,
   runnerPinProblems,
   runnerPinsInHeader,
+  withRunnerPin,
 } from "../integrations/genlayer/runner-pin";
 
 /*
@@ -114,14 +119,27 @@ if (pinProblems.length > 0) {
 
 const pins = runnerPinsInHeader(code);
 for (const pin of pins) console.log(`runner:   ${pin}`);
-if (
-  config.networkKey === "studio-next" &&
-  pins.length === 1 &&
-  pins[0] !== STUDIO_NEXT_PY_GENLAYER_PIN
-) {
-  console.log(
-    `warning:  Studio Next ships ${STUDIO_NEXT_PY_GENLAYER_PIN}; this contract pins ${pins[0]}`,
-  );
+
+/*
+ * `--pin` deploys the same contract under a different runner, for a network
+ * whose GenVM release this repository does not know yet. Only the header line
+ * changes; the contract body is exactly what the tests ran.
+ */
+let deployCode = code;
+let deployedPin: string | null = pins.find((pin) => pin.startsWith("py-genlayer:")) ?? null;
+const forcedPin = flag("pin");
+if (forcedPin) {
+  const problem = checkRunnerPin(forcedPin);
+  if (problem) {
+    console.error(`\n--pin ${forcedPin} cannot be loaded by GenVM: ${problem}`);
+    console.error("Nothing was sent to the network.");
+    process.exit(1);
+  }
+  deployCode = withRunnerPin(code, forcedPin);
+  deployedPin = forcedPin;
+  console.log(`runner:   forced to ${forcedPin} (--pin); the file on disk is unchanged`);
+} else if (pins.length === 1 && pins[0] !== STUDIO_NEXT_PY_GENLAYER_PIN) {
+  console.log(`note:     the newest runner this repository knows is ${STUDIO_NEXT_PY_GENLAYER_PIN}`);
 }
 
 const client = createClient({ chain: config.chain, account });
@@ -147,37 +165,64 @@ const client = createClient({ chain: config.chain, account });
  */
 if (env.RECOURSE_SKIP_SCHEMA_PROBE === "1") {
   console.log("probe:    skipped (RECOURSE_SKIP_SCHEMA_PROBE=1)");
+} else if (forcedPin) {
+  console.log("probe:    skipped for a forced --pin; the deployment itself will tell");
 } else {
-  try {
-    const schema = await client.getContractSchemaForCode(code);
-    const methods = Object.keys(schema?.methods ?? {});
-    console.log(
-      `probe:    the network resolved this contract — ${methods.length} method(s)` +
-        (methods.length > 0 ? `: ${methods.join(", ")}` : ""),
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/runner|invalid_contract|malformed/i.test(message)) {
-      console.error("\nThe network could not load this contract's runner:");
-      console.error(`  ${message}`);
-      for (const pin of pins) console.error(`  contract pins: ${pin}`);
-      console.error(`  expected here: ${STUDIO_NEXT_PY_GENLAYER_PIN}`);
-      console.error(
-        "\nA well-formed pin naming a runner this network does not ship fails exactly" +
-          "\nlike this, before one line of the contract runs — the same symptom as a" +
-          "\nmalformed pin, from a different cause. The hash tracks the network's" +
-          "\nGenVM release, not the contract: check which release the target network" +
-          "\nis running and update line 2 of contracts/recourse_adjudicator.py to" +
-          "\nmatch it.",
-      );
-      console.error("\nNothing was sent and no fee was taken.");
-      console.error("Re-run with RECOURSE_SKIP_SCHEMA_PROBE=1 to skip this check.");
-      process.exit(1);
+  /*
+   * Runner negotiation. The contract's own pin is probed first; only if the
+   * network answers "no such runner" are the other known runners tried, newest
+   * first. Studio moved from rc7's runner to rc9's in October 2026, so a
+   * network can be on either side of that change on any given day — this is
+   * what lets one command deploy to both without editing the contract.
+   */
+  const negotiation = await negotiateRunnerPin(code, async (candidate) => {
+    try {
+      const schema = await client.getContractSchemaForCode(candidate);
+      const methods = Object.keys(schema?.methods ?? {});
+      return {
+        status: "ok" as const,
+        detail: `${methods.length} method(s)` + (methods.length > 0 ? `: ${methods.join(", ")}` : ""),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return /runner|invalid_contract|malformed/i.test(message)
+        ? { status: "runner-missing" as const, detail: message.slice(0, 300) }
+        : { status: "inconclusive" as const, detail: message.slice(0, 300) };
     }
+  });
+
+  for (const attempt of negotiation.attempts) {
+    const release = KNOWN_PY_GENLAYER_RUNNERS.find((runner) => runner.pin === attempt.pin)?.genvm;
     console.log(
-      `probe:    inconclusive (${message.slice(0, 300)}); continuing to the fee quote`,
+      `probe:    ${attempt.pin}${release ? ` (GenVM ${release})` : ""} → ${attempt.result.status}` +
+        (attempt.result.detail ? ` — ${attempt.result.detail}` : ""),
     );
   }
+
+  if (negotiation.pin === null) {
+    console.error("\nThe network could not load this contract under any runner this repository knows:");
+    for (const attempt of negotiation.attempts) console.error(`  ${attempt.pin}: ${attempt.result.detail}`);
+    console.error(
+      "\nA well-formed pin naming a runner this network does not ship fails exactly" +
+        "\nlike this, before one line of the contract runs. The hash tracks the network's" +
+        "\nGenVM release, not the contract: find the py-genlayer runner the target network" +
+        "\nships and re-run with --pin py-genlayer:<hash>.",
+    );
+    console.error("\nNothing was sent and no fee was taken.");
+    console.error("Re-run with RECOURSE_SKIP_SCHEMA_PROBE=1 to skip this check.");
+    process.exit(1);
+  }
+
+  if (negotiation.attempts.at(-1)?.result.status === "inconclusive") {
+    console.log("probe:    inconclusive; deploying with the contract's own pin");
+  } else if (negotiation.pin !== deployedPin) {
+    console.log(
+      `runner:   this network does not carry ${deployedPin}; deploying with ${negotiation.pin}` +
+        " (header rewritten for this deployment only)",
+    );
+  }
+  deployCode = negotiation.code;
+  deployedPin = negotiation.pin;
 }
 
 /* ------------------------------------------------------------------ funding */
@@ -198,6 +243,12 @@ try {
       // whatever the quote asks for.
       await client.request({ method: "sim_fundAccount", params: [account.address, 50] });
       console.log("funding:  Studio funded this ephemeral account with 50 GEN");
+    } else if (balance < 10n ** 19n) {
+      // A provided key that is nearly empty on a sandbox: top it up the same
+      // way, rather than failing at the fee quote. Sandbox-only; a public
+      // testnet key is never topped up from anywhere.
+      await client.request({ method: "sim_fundAccount", params: [account.address, 50] });
+      console.log("funding:  Studio topped this key up with 50 GEN (balance was under 10 GEN)");
     }
   } else if (balance === 0n) {
     console.error("\nThis wallet has no GEN, so the deployment will be rejected.");
@@ -220,7 +271,7 @@ const { kit, profile } = createForumKit(config, privateKey, {
 
 if (profile.note) console.log(`fee note: ${profile.note}`);
 
-const deployTx = { kind: "deploy" as const, code, args: [] as unknown[] };
+const deployTx = { kind: "deploy" as const, code: deployCode, args: [] as unknown[] };
 
 const quote = await kit.estimate({ preset: "standard" }, deployTx);
 console.log(
@@ -312,6 +363,41 @@ if (!address) {
   process.exit(1);
 }
 
+/* ------------------------------------------------------------- verification */
+
+/*
+ * A deployed address is a claim; a contract that answers is evidence. v2
+ * publishes its generation and remedy rules through get_policy, so read it
+ * back before recording anything. A failed read is reported, not fatal:
+ * reads can lag a fresh deployment by a few seconds.
+ */
+type Policy = { version?: string; remedy_modes?: string[]; agreement_tolerance_bps?: number };
+let policy: Policy | null = null;
+for (let attempt = 0; attempt < 5 && policy === null; attempt += 1) {
+  try {
+    const raw = await client.readContract({
+      address: address as `0x${string}`,
+      functionName: "get_policy",
+      args: [],
+    });
+    policy = JSON.parse(String(raw)) as Policy;
+  } catch (error) {
+    if (attempt === 4) {
+      console.log(
+        `policy:   not readable yet (${error instanceof Error ? error.message.slice(0, 200) : String(error)})`,
+      );
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+}
+if (policy) {
+  console.log(
+    `policy:   RecourseAdjudicator ${policy.version ?? "?"} · remedy modes ${(policy.remedy_modes ?? []).join(", ")}` +
+      ` · tolerance ${policy.agreement_tolerance_bps ?? "?"} bps`,
+  );
+}
+
 /* ----------------------------------------------------------------- recording */
 
 const stamp = new Date().toISOString();
@@ -334,6 +420,8 @@ writeFileSync(
           deployTx: genlayerTxId,
           deployer: account.address,
           explorer,
+          runner: deployedPin,
+          contractVersion: policy?.version ?? null,
         },
       },
     },
@@ -361,6 +449,19 @@ try {
 committed.note =
   "Default RecourseAdjudicator deployments, one per network. Override with GENLAYER_CONTRACT_ADDRESS, or redeploy with `npm run genlayer:deploy`.";
 committed.default = config.networkKey;
+/*
+ * The previous deployment on this network is kept, not overwritten: its
+ * rulings are still on-chain evidence, and in-flight disputes recorded
+ * against it are still polled at their original address.
+ */
+const previousEntry = (committed.deployments?.[config.networkKey] ?? null) as
+  | (Record<string, unknown> & { address?: string; history?: unknown[] })
+  | null;
+const history: unknown[] = [];
+if (previousEntry?.address && previousEntry.address !== address) {
+  const { history: older, ...rest } = previousEntry;
+  history.push(rest, ...(Array.isArray(older) ? older : []));
+}
 committed.deployments = {
   ...(committed.deployments ?? {}),
   [config.networkKey]: {
@@ -370,6 +471,11 @@ committed.deployments = {
     deployedAt: stamp,
     deployTx: genlayerTxId,
     explorer,
+    deployer: account.address,
+    runner: deployedPin,
+    contractVersion: policy?.version ?? null,
+    status: `${tracked.statusName ?? tracked.phase}, execution ${execution}`,
+    ...(history.length > 0 ? { history } : {}),
   },
 };
 writeFileSync(committedFile, `${JSON.stringify(committed, null, 2)}\n`);
@@ -379,6 +485,8 @@ console.log(`  address:     ${address}`);
 console.log(`  status:      ${tracked.statusName ?? tracked.phase}`);
 console.log(`  execution:   ${tracked.executionResultName ?? "not reported"}`);
 console.log(`  deposit:     ${formatGen(quote.feeValue) ?? `${quote.feeValue} wei`}`);
+console.log(`  runner:      ${deployedPin ?? "not recorded"}`);
+console.log(`  version:     ${policy?.version ?? "not confirmed"}`);
 console.log(`  recorded in: ${localFile}`);
 console.log(`  committed:   ${committedFile}`);
 if (explorer) {

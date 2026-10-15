@@ -197,8 +197,9 @@ export default async function ProtocolPage() {
       <section className="border-t border-line py-14 sm:py-16">
         <SectionLabel index="05">State machine</SectionLabel>
         <p className="mt-6 max-w-2xl text-[15px] leading-relaxed text-fg-muted">
-          A protected transaction has two terminal states. Both are first-class: the protocol is not
-          designed around the assumption that merchants cheat, nor that buyers are always right.
+          A protected transaction ends in a release, a refund or — when the agreement allows it — a
+          split. All are first-class: the protocol is not designed around the assumption that
+          merchants cheat, nor that buyers are always right.
         </p>
 
         <div className="mt-8 flex flex-col gap-4">
@@ -224,11 +225,40 @@ export default async function ProtocolPage() {
             <PanelHeader title="PATH C — CONTESTED, MERCHANT UPHELD" />
             <div className="px-4 py-6 sm:px-6">
               <p className="font-mono text-xs leading-relaxed tracking-[0.1em] text-fg-muted uppercase">
-                Adjudicating → Merchant won → Released
+                Adjudicating → Provisional ruling → Merchant won → Released
               </p>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-fg-dim">
                 When a claim is not supported by the locked agreement, escrow releases to the
                 merchant. Opening recourse is not a refund button.
+              </p>
+            </div>
+          </Panel>
+
+          <Panel tone="quiet">
+            <PanelHeader title="PATH D — PARTIAL BREACH, GRADUATED REMEDY" />
+            <div className="px-4 py-6 sm:px-6">
+              <p className="font-mono text-xs leading-relaxed tracking-[0.1em] text-fg-muted uppercase">
+                Adjudicating → Provisional ruling → Split awarded → Partially refunded
+              </p>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-fg-dim">
+                An agreement can allow a partial remedy. When a breach is real but the delivery still
+                carried part of the value, GenLayer awards a refund in 10-point steps and escrow
+                settles in two exact legs: the buyer&apos;s share, rounded down, and the merchant&apos;s
+                remainder.
+              </p>
+            </div>
+          </Panel>
+
+          <Panel tone="quiet">
+            <PanelHeader title="ACCEPTED IS NOT FINAL" />
+            <div className="px-4 py-6 sm:px-6">
+              <p className="font-mono text-xs leading-relaxed tracking-[0.1em] text-fg-muted uppercase">
+                Provisional ruling → Appealed → Provisional ruling → Final
+              </p>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-fg-dim">
+                A GenLayer ruling is provisional until its finality window closes. Until then the losing
+                side can appeal: a larger validator committee re-runs the contract&apos;s judgment, and if its
+                majority disagrees the ruling is recomputed. Escrow never moves on a provisional ruling.
               </p>
             </div>
           </Panel>

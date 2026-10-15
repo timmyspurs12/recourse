@@ -156,12 +156,19 @@ export function CaseLedger({
               <span className="font-mono text-sm tracking-[0.1em] text-fg">{record.ref}</span>
               <div className="flex items-center gap-2">
                 {record.outcome ? (
-                  <Tag tone={record.outcome === "BUYER_WINS" ? "protected" : "pass"} size="xs">
+                  <Tag
+                    tone={record.outcome === "MERCHANT_WINS" ? "pass" : "protected"}
+                    size="xs"
+                  >
                     {rulingOutcomeLabel[record.outcome].replace("WINS", "WON")}
                   </Tag>
                 ) : (
                   <Tag tone="pending" size="xs" dot>
-                    {caseStageLabel[record.status]}
+                    {record.judgmentStage === "UNDER_APPEAL"
+                      ? "Under appeal"
+                      : record.judgmentStage === "PROVISIONAL"
+                        ? "Provisional ruling"
+                        : caseStageLabel[record.status]}
                   </Tag>
                 )}
                 <ArrowUpRight
@@ -199,14 +206,14 @@ export function CaseLedger({
                   <dd
                     className={cx(
                       "mt-1 font-mono text-xs",
-                      record.settlement === "REFUNDED"
+                      record.settlement === "REFUNDED" || record.settlement === "PARTIAL_REFUND"
                         ? "text-protected"
                         : record.settlement === "RELEASED"
                           ? "text-pass"
                           : "text-fg-dim",
                     )}
                   >
-                    {record.settlement ?? "pending"}
+                    {record.settlement?.replace(/_/g, " ") ?? "pending"}
                   </dd>
                 </div>
               </dl>

@@ -8,10 +8,16 @@
 
 CREATE TYPE order_state AS ENUM (
   'OFFERED','ACCEPTED','ESCROWED','DELIVERED','VERIFICATION_PENDING','FULFILLED',
-  'DISPUTED','ADJUDICATING','BUYER_WON','MERCHANT_WON','REFUNDED','RELEASED','CANCELLED'
+  'DISPUTED','ADJUDICATING',
+  -- v0.2: a ruling GenLayer accepted but can still recompute on appeal.
+  'PROVISIONAL_RULING','APPEALED',
+  'BUYER_WON','MERCHANT_WON','SPLIT_AWARDED',
+  'REFUNDED','PARTIALLY_REFUNDED','RELEASED','CANCELLED'
 );
 
-CREATE TYPE settlement_outcome AS ENUM ('RELEASED','REFUNDED');
+CREATE TYPE settlement_outcome AS ENUM ('RELEASED','REFUNDED','PARTIAL_REFUND');
+CREATE TYPE ruling_finality    AS ENUM ('PROVISIONAL','FINAL');
+CREATE TYPE appeal_outcome     AS ENUM ('PENDING','UPHELD','REVISED');
 CREATE TYPE term_evaluation   AS ENUM ('DETERMINISTIC','SEMANTIC');
 CREATE TYPE check_result      AS ENUM ('PASS','BREACH','INDETERMINATE');
 
@@ -145,8 +151,48 @@ CREATE TABLE adjudications (
   ruling           JSONB,
   failure_reason   TEXT,
   submitted_at     TIMESTAMPTZ NOT NULL,
-  finalized_at     TIMESTAMPTZ
+  finalized_at     TIMESTAMPTZ,
+  -- v0.2. NULL finality marks a record written by v0.1, which settled on
+  -- acceptance; such a ruling is re-confirmed on-chain before it can settle.
+  remedy_mode      TEXT CHECK (remedy_mode IN ('ALL_OR_NOTHING','GRADUATED')),
+  submitter        TEXT,
+  contract_version INTEGER,
+  finality         ruling_finality,
+  decided_at       TIMESTAMPTZ,
+  rounds           INTEGER,
+  lifecycle        JSONB,
+  finalization_tx  TEXT,
+  finality_confirmed_at TIMESTAMPTZ,
+  -- Money moves only on a final ruling.
+  CHECK (status <> 'FINALIZED' OR finality IS NULL OR finality = 'FINAL')
 );
+
+-- One row per appeal against a provisional ruling. GenLayer appeals the same
+-- transaction, so the row records which decision it was bound to and the
+-- network signals compared later to know when the appeal round was over.
+CREATE TABLE appeals (
+  id                       TEXT PRIMARY KEY,
+  adjudication_id          TEXT NOT NULL REFERENCES adjudications(id) ON DELETE CASCADE,
+  requested_by             TEXT NOT NULL CHECK (requested_by IN ('BUYER','MERCHANT')),
+  requested_by_handle      TEXT NOT NULL,
+  reason                   TEXT NOT NULL,
+  filed_at                 TIMESTAMPTZ NOT NULL,
+  transaction_hash         TEXT NOT NULL,
+  charge_wei               NUMERIC(78,0),
+  paid_by                  TEXT,
+  decision_id              TEXT,
+  rounds_at_filing         INTEGER,
+  failed_appeals_at_filing INTEGER,
+  observed_in_flight       BOOLEAN NOT NULL DEFAULT FALSE,
+  ruling_before            JSONB NOT NULL,
+  ruling_after             JSONB,
+  outcome                  appeal_outcome NOT NULL,
+  resolved_at              TIMESTAMPTZ,
+  -- Each party may appeal a given ruling once.
+  UNIQUE (adjudication_id, requested_by)
+);
+-- At most one appeal in flight per adjudication.
+CREATE UNIQUE INDEX appeals_one_pending_idx ON appeals (adjudication_id) WHERE outcome = 'PENDING';
 
 -- The core safety invariant: at most one settlement per order, so RELEASE and
 -- REFUND can never both execute. The idempotency key makes retries harmless.
@@ -163,7 +209,23 @@ CREATE TABLE settlements (
   rail             TEXT NOT NULL,
   execution        TEXT NOT NULL,
   transaction_hash TEXT,
-  executed_at      TIMESTAMPTZ NOT NULL
+  executed_at      TIMESTAMPTZ NOT NULL,
+  -- v0.2: share of the escrow returned to the buyer.
+  refund_bps       INTEGER CHECK (refund_bps BETWEEN 0 AND 10000)
+);
+
+-- Every movement out of escrow. A partial refund has exactly two legs, and
+-- they always add up to the settlement amount (refund rounded down, release
+-- the remainder).
+CREATE TABLE settlement_legs (
+  settlement_id    TEXT NOT NULL REFERENCES settlements(id) ON DELETE CASCADE,
+  party            TEXT NOT NULL CHECK (party IN ('BUYER','MERCHANT')),
+  to_party         TEXT NOT NULL,
+  amount           NUMERIC(20,6) NOT NULL CHECK (amount > 0),
+  currency         TEXT NOT NULL,
+  execution        TEXT NOT NULL,
+  transaction_hash TEXT,
+  PRIMARY KEY (settlement_id, party)
 );
 
 CREATE TABLE events (

@@ -14,9 +14,16 @@ export type OrderState =
   | "FULFILLED"
   | "DISPUTED"
   | "ADJUDICATING"
+  /** v0.2: ruled, but appealable until GenLayer finalizes the ruling. */
+  | "PROVISIONAL_RULING"
+  /** v0.2: an appeal round is re-running consensus. */
+  | "APPEALED"
   | "BUYER_WON"
   | "MERCHANT_WON"
+  /** v0.2: final ruling with a partial refund (graduated agreements). */
+  | "SPLIT_AWARDED"
   | "REFUNDED"
+  | "PARTIALLY_REFUNDED"
   | "RELEASED"
   | "CANCELLED";
 
@@ -51,9 +58,12 @@ export interface Agreement {
   hash: string;
   lockedAt: string | null;
   document: {
-    version: "recourse/0.1";
+    version: "recourse/0.1" | "recourse/0.2";
     terms: AgreementTerm[];
-    refundPolicy: { recourseWindowHours: number };
+    refundPolicy: {
+      recourseWindowHours: number;
+      settlement: "full_refund" | "graduated_refund";
+    };
     [key: string]: unknown;
   };
 }
@@ -92,12 +102,35 @@ export interface Verification {
 }
 
 export interface Ruling {
-  decision: "BUYER_WINS" | "MERCHANT_WINS";
+  decision: "BUYER_WINS" | "MERCHANT_WINS" | "SPLIT";
   materialBreach: boolean;
   violatedTerms: string[];
   satisfiedTerms: string[];
-  recommendedSettlement: "REFUND" | "RELEASE";
+  recommendedSettlement: "REFUND" | "RELEASE" | "SPLIT";
+  /**
+   * Share of the escrow owed to the buyer, in basis points (10000 = full
+   * refund). Absent on rulings recorded before v0.2; derive it from the
+   * decision in that case.
+   */
+  refundBps?: number;
   reasoningSummary: string;
+}
+
+export interface AppealRecord {
+  id: string;
+  requestedBy: "BUYER" | "MERCHANT";
+  requestedByHandle: string;
+  reason: string;
+  filedAt: string;
+  transactionHash: string;
+  /** Bond plus appeal funding the network quoted, in wei. */
+  chargeWei: string | null;
+  paidBy: string | null;
+  decisionId: string | null;
+  outcome: "PENDING" | "UPHELD" | "REVISED";
+  rulingBefore: { decision: Ruling["decision"]; refundBps: number; violatedTerms: string[] };
+  rulingAfter: { decision: Ruling["decision"]; refundBps: number; violatedTerms: string[] } | null;
+  resolvedAt: string | null;
 }
 
 export interface Adjudication {
@@ -110,11 +143,21 @@ export interface Adjudication {
   transactionHash: string | null;
   networkStatus: string | null;
   votes: Record<string, string> | null;
-  status: "NOT_REQUIRED" | "SUBMITTED" | "PENDING" | "FINALIZED" | "FAILED";
+  /**
+   * DECIDED: a provisional ruling (GenLayer ACCEPTED it; still appealable).
+   * APPEALED: an appeal round is in progress. FINALIZED: final, settleable.
+   */
+  status: "NOT_REQUIRED" | "SUBMITTED" | "PENDING" | "DECIDED" | "APPEALED" | "FINALIZED" | "FAILED";
   ruling: Ruling | null;
   failureReason: string | null;
   submittedAt: string;
   finalizedAt: string | null;
+  /** v0.2 fields; absent on records written before them. */
+  finality?: "PROVISIONAL" | "FINAL" | null;
+  remedyMode?: "ALL_OR_NOTHING" | "GRADUATED";
+  submitter?: string | null;
+  contractVersion?: number | null;
+  appeals?: AppealRecord[];
 }
 
 export interface Dispute {
@@ -126,10 +169,22 @@ export interface Dispute {
   openedAt: string;
 }
 
+export interface SettlementLeg {
+  party: "BUYER" | "MERCHANT";
+  to: string;
+  amount: Money;
+  execution: "ONCHAIN" | "SIGNATURE_VERIFIED_LOCAL_ESCROW";
+  transactionHash: string | null;
+}
+
 export interface Settlement {
   id: string;
   orderId: string;
-  outcome: "RELEASED" | "REFUNDED";
+  outcome: "RELEASED" | "REFUNDED" | "PARTIAL_REFUND";
+  /** Share of the escrow returned to the buyer, in basis points (v0.2). */
+  refundBps?: number;
+  /** Every movement out of escrow; a partial refund has two (v0.2). */
+  legs?: SettlementLeg[];
   amount: Money;
   to: string;
   reason: string;
@@ -151,7 +206,7 @@ export interface Dossier {
   order: Order;
   agreement: Agreement;
   payment: {
-    escrow: "NONE" | "HELD" | "RELEASED" | "REFUNDED";
+    escrow: "NONE" | "HELD" | "RELEASED" | "REFUNDED" | "SPLIT";
     reference: string;
     authorizationVerified: boolean;
     execution: string;

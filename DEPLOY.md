@@ -2,6 +2,11 @@
 
 The submission form requires a **live website URL**. This is the shortest path to one.
 
+> **Upgrading an existing deployment to v0.2?** Follow [`RUNBOOK.md`](RUNBOOK.md): it redeploys the
+> v2 contract (with runner negotiation), points Railway at it, and captures the transactions the
+> milestone notes cite. Studio moved to GenVM v0.6.0-rc9 on 2026-10-14, which changes the python
+> runner hash — the section on the runner pin below explains why that matters.
+
 ---
 
 ## The one thing that constrains hosting
@@ -37,9 +42,10 @@ mid-demo. Use a container host with a volume — or implement the Postgres adapt
    ```
    GENLAYER_NETWORK=studio-next
    GENLAYER_CONTRACT_ADDRESS=0x…        # from `npm run genlayer:deploy`
-   GENLAYER_PRIVATE_KEY=0x…             # pays the fee deposit for each ruling
+   GENLAYER_PRIVATE_KEY=0x…             # pays fee deposits and, in v0.2, appeal bonds
    RECOURSE_REQUIRE_AUTH=1
    RECOURSE_STORE_FILE=/app/.recourse/ledger.json
+   # RECOURSE_AUTO_FINALIZE=0           # optional: only on contract networks; Studio finalizes itself
    ```
 5. **Networking → Generate Domain.** That URL goes in the form's *Website* field.
 
@@ -100,6 +106,10 @@ is; the app reports it as `DEMO` for exactly that reason rather than over-claimi
 
 ### Current deployment
 
+> These are the **v1** contract's values (the accepted hackathon version). v0.2 needs the v2
+> contract: after `npm run genlayer:deploy`, `genlayer.deployment.json` records the new address
+> and keeps this one under `history`, and the table below should be updated from the runbook.
+
 | | |
 | --- | --- |
 | Contract | `0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56` |
@@ -118,7 +128,7 @@ Line 2 of `contracts/recourse_adjudicator.py` names the runner GenVM must load:
 
 ```python
 # v0.3.0
-# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+# { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
 ```
 
 That hash identifies a **build of the python runner**, and GenVM repackages it
@@ -152,11 +162,25 @@ stored nothing at all. Two consequences follow, and the repo is built around bot
    cache for free and refuses to take a fee deposit for a contract the network
    cannot load. Skip it with `RECOURSE_SKIP_SCHEMA_PROBE=1`.
 
-If a deploy fails this way: check which Studio release the target network is
-running, read the pin its example contracts use, and update line 2 to match.
-`integrations/genlayer/runner-pin.ts` holds the expected value as
-`STUDIO_NEXT_PY_GENLAYER_PIN`, and `tests/genlayer.test.ts` asserts the contract
-agrees with it — so update both, or the test tells you.
+It happened again in October 2026. GenVM v0.6.0-rc9 (released 2026-10-08)
+repackaged the runner as `babwp9t3…`, and Studio moved from rc7 to rc9 on
+2026-10-14 (`genlayer-studio` commit `c54dd453`). The v1 contract — deployed
+with `5jycge4q…` — may therefore stop executing on a network that no longer
+carries its runner, and a fresh deploy of the old file would fail the same way.
+This cannot be checked from outside the network, so v0.2 stops guessing:
+
+- The contract now pins `babwp9t3…` (rc9), the newest runner this repository
+  knows; `KNOWN_PY_GENLAYER_RUNNERS` in `integrations/genlayer/runner-pin.ts`
+  lists each pin with the GenVM release that ships it.
+- **`npm run genlayer:deploy` negotiates.** It probes the contract's own pin
+  first; only if the network answers "runner missing" does it try the other
+  known, non-superseded runners (newest first), rewriting the header line for
+  that deployment only. An inconclusive probe keeps the declared pin. The pin
+  actually used is printed and recorded in `genlayer.deployment.json`.
+- `--pin py-genlayer:<hash>` forces a runner this repository does not know yet.
+
+`tests/genlayer.test.ts` asserts the contract pins the newest known runner, and
+`tests/v02.test.ts` covers the negotiation.
 
 
 ### Fees, honestly

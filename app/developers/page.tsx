@@ -67,16 +67,22 @@ const DISPUTE_EXAMPLE = `const { dispute } = await recourse.openDispute(order.id
 })
 
 await recourse.submitAdjudication(dispute.id)
+
+// GenLayer ACCEPTS a ruling before it FINALIZES it. In between it is
+// provisional, and the side it went against may appeal it.
+const provisional = await recourse.awaitDecision(dispute.id)
+// provisional.status            -> "DECIDED"
+// provisional.ruling.decision   -> "BUYER_WINS" | "MERCHANT_WINS" | "SPLIT"
+// provisional.ruling.refundBps  -> 10000 | 0 | e.g. 6000 (graduated agreements)
+
+// await merchantClient.appeal(dispute.id, { reason: "…" })  // losing side only
+
 const adjudication = await recourse.awaitRuling(dispute.id)
-
-// adjudication.status           -> "FINALIZED"
-// adjudication.ruling.decision  -> "BUYER_WINS"
+// adjudication.status           -> "FINALIZED"  (no longer appealable)
+// adjudication.appeals          -> [{ outcome: "UPHELD" | "REVISED", chargeWei, … }]
 // adjudication.transactionHash  -> real GenLayer transaction
-// adjudication.votes            -> per-validator votes, or null if not reported
 
-if (adjudication.ruling?.decision === "BUYER_WINS") {
-  await recourse.settle(order.id)   // idempotent
-}`;
+await recourse.settle(order.id)   // idempotent; refused while provisional`;
 
 const TERMS_EXAMPLE = `// Deterministic: settled by the protocol, instantly, with no model.
 term.atLeast("minimum_sources", "Minimum sources", 5)      // GTE

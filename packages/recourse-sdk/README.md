@@ -149,15 +149,38 @@ const { dispute } = await recourse.openDispute(order.id, {
 
 // Refer the contested terms to the forum, then wait for consensus.
 await recourse.submitAdjudication(dispute.id);
-const adjudication = await recourse.awaitRuling(dispute.id, { timeoutMs: 300_000 });
 
-if (adjudication.ruling?.decision === "BUYER_WINS") {
-  const settled = await recourse.settle(order.id);
-  settled.settlement?.outcome; // "REFUNDED"
-}
+// v0.2: the first ruling is provisional — GenLayer accepted it, but it can
+// still be appealed and recomputed until the network finalizes it.
+const provisional = await recourse.awaitDecision(dispute.id);
+provisional.status;            // "DECIDED"
+provisional.ruling?.decision;  // "BUYER_WINS" | "MERCHANT_WINS" | "SPLIT"
+
+// The side the ruling went against may appeal, once, while it is provisional
+// (signed as that party):
+//   await merchantRecourse.appeal(dispute.id, { reason: "Three sources were enough." });
+
+const adjudication = await recourse.awaitRuling(dispute.id, { timeoutMs: 600_000 });
+adjudication.status;   // "FINALIZED" — no longer appealable
+adjudication.appeals;  // [{ outcome: "UPHELD" | "REVISED", chargeWei, ... }]
+
+const settled = await recourse.settle(order.id);
+settled.settlement?.outcome; // "REFUNDED" | "RELEASED" | "PARTIAL_REFUND"
+settled.settlement?.legs;    // one leg, or two for a split
 ```
 
-`settle()` is idempotent. Call it twice and you get the same settlement, not two payouts.
+`settle()` is idempotent. Call it twice and you get the same settlement, not two payouts. Called
+while a ruling is still provisional it is refused with `RULING_NOT_FINAL`, and nothing moves.
+
+### Graduated remedies
+
+```ts
+await recourse.createProtectedPurchase({ ...input, remedy: "graduated_refund" });
+```
+
+The remedy is locked into the agreement before payment. Under it the forum may rule `SPLIT` with a
+refund in basis points (`ruling.refundBps`, in 10-point steps); settlement returns the buyer's
+share rounded down to the micro-unit and releases the exact remainder to the merchant.
 
 ---
 
@@ -188,15 +211,18 @@ promise was kept.
 
 ## Waiting honestly
 
-`awaitRuling` polls until the forum reaches finality or the timeout expires. It never fabricates
-progress. If it returns with `status: "PENDING"`, the ruling genuinely has not happened and the
+`awaitRuling` polls until the ruling is final or the timeout expires; `awaitDecision` returns as
+soon as a provisional ruling exists. Neither fabricates progress. If `awaitRuling` returns with
+`status: "PENDING"`, `"DECIDED"` or `"APPEALED"`, the ruling genuinely is not final yet and the
 escrow is still held — display that, do not round it up to a result.
 
 ```ts
 const adjudication = await recourse.awaitRuling(dispute.id, { timeoutMs: 120_000 });
 
 switch (adjudication.status) {
-  case "FINALIZED": /* adjudication.ruling is present */ break;
+  case "FINALIZED": /* adjudication.ruling is final */ break;
+  case "DECIDED":   /* provisional ruling; appealable; escrow held */ break;
+  case "APPEALED":  /* appeal round in progress; escrow held */ break;
   case "PENDING":   /* still in consensus; escrow held */ break;
   case "FAILED":    /* adjudication.failureReason explains why; escrow held */ break;
 }
@@ -261,7 +287,9 @@ broadcast. Surface that to your users rather than implying a transfer occurred.
 | `openDispute(orderId, input)` | Open a recourse claim |
 | `submitAdjudication(disputeId)` | Refer contested terms to the forum |
 | `getAdjudication(disputeId)` | One poll |
-| `awaitRuling(disputeId, opts)` | Poll to finality |
-| `settle(orderId)` | Execute release or refund (idempotent) |
+| `awaitDecision(disputeId, opts)` | Poll until a ruling exists (provisional or final) |
+| `appeal(disputeId, { reason })` | Appeal a provisional ruling — losing side, once, signed |
+| `awaitRuling(disputeId, opts)` | Poll until the ruling is final |
+| `settle(orderId)` | Execute release, refund or split (idempotent; refused while provisional) |
 | `getOrder` · `listOrders` · `getDispute` · `listDisputes` | Reads |
 | `getNetworkInfo()` | What this deployment is connected to |

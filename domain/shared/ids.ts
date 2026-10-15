@@ -36,6 +36,7 @@ export const newDeliveryId = () => `dlv_${suffix()}`;
 export const newEvidenceId = () => `evd_${suffix()}`;
 export const newDisputeId = (orderId: string) => `dsp_${orderId.toLowerCase()}`;
 export const newAdjudicationId = () => `adj_${suffix()}`;
+export const newAppealId = () => `apl_${suffix()}`;
 export const newSettlementId = () => `stl_${suffix()}`;
 export const newEventId = () => `evt_${suffix()}`;
 export const newPaymentId = () => `pay_${suffix()}`;

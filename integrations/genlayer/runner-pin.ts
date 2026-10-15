@@ -6,7 +6,7 @@
  * the network has loaded the runtime that executes it:
  *
  *   # v0.3.0
- *   # { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+ *   # { "Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" }
  *
  * GenVM identifies a runner by content hash, encoded as Crockford Base32
  * ("gvm32": alphabet `0123456789abcdefghjkmnpqrstvwxyz`, no padding, i/l read
@@ -27,7 +27,8 @@
  * hypothetical. GenVM repackages the python runner between releases, so the
  * hash changes without the contract changing: Studio Next moved from
  * `9b8kjyda…` (GenVM v0.6.0-rc1/rc2) to `5jycge4q…` (v0.6.0-rc3, shipped by
- * Studio v0.123.0-rc.5+). A contract pinning the superseded hash is
+ * Studio v0.123.0-rc.5+), and in October 2026 to `babwp9t3…` (v0.6.0-rc9).
+ * A contract pinning a superseded hash is
  * byte-for-byte valid, decodes cleanly, and still finalizes with
  * `invalid_contract runner malformed` and nothing stored — the same symptom as
  * a malformed pin, from a completely different cause. Only the network can
@@ -42,19 +43,50 @@ const GVM32_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 const GVM32_LENGTH = 52;
 
 /**
- * The py-genlayer runner shipped by Studio Next (Consensus v0.6, chain 61997).
+ * py-genlayer runners by GenVM release, newest first.
  *
- * GenVM v0.6.0-rc3, as shipped by Studio v0.123.0-rc.5 and later. Supersedes
- * `9b8kjyda2ycxyq4ea6g4yfpnydxhd52gqba5rb8dw7krkh5mn9p0` (v0.6.0-rc1/rc2),
- * which the 61997 fleet no longer carries and now rejects at load time.
+ * The hash tracks the network's GenVM release, not the contract: GenVM
+ * repackages the python runner between releases, so the same contract needs a
+ * different pin on a network that has upgraded. Studio Next has carried three:
  *
- * This value tracks the network, not the contract: it changes when the fleet's
- * GenVM release changes, and a stale one fails with no local symptom at all.
- * Confirm it against the release the target network is actually running before
- * trusting a deployment to it.
+ *  - `babwp9t3…` — GenVM v0.6.0-rc9 (released 2026-10-08; Studio moved to it on
+ *    2026-10-14).
+ *  - `5jycge4q…` — GenVM v0.6.0-rc3 through rc7 (Studio v0.123.0-rc.5+). The
+ *    v1 RecourseAdjudicator was deployed with this one.
+ *  - `9b8kjyda…` — GenVM v0.6.0-rc1/rc2. Superseded; the fleet rejects it.
+ *
+ * A stale pin fails with no local symptom at all, so `scripts/genlayer-deploy.mts`
+ * asks the network which of these it can load (`negotiateRunnerPin`) before
+ * paying for a deployment.
  */
-export const STUDIO_NEXT_PY_GENLAYER_PIN =
-  "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng";
+export const KNOWN_PY_GENLAYER_RUNNERS: ReadonlyArray<{
+  pin: string;
+  genvm: string;
+  superseded: boolean;
+}> = [
+  {
+    pin: "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0",
+    genvm: "v0.6.0-rc9",
+    superseded: false,
+  },
+  {
+    pin: "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng",
+    genvm: "v0.6.0-rc3..rc7",
+    superseded: false,
+  },
+  {
+    pin: "py-genlayer:9b8kjyda2ycxyq4ea6g4yfpnydxhd52gqba5rb8dw7krkh5mn9p0",
+    genvm: "v0.6.0-rc1/rc2",
+    superseded: true,
+  },
+];
+
+/**
+ * The newest py-genlayer runner this repository knows about, and the one the
+ * contract pins. Confirm it against the release the target network is actually
+ * running before trusting a deployment to it.
+ */
+export const STUDIO_NEXT_PY_GENLAYER_PIN = KNOWN_PY_GENLAYER_RUNNERS[0].pin;
 
 /**
  * Decodes a gvm32 string, or returns null when it is not a canonical encoding.
@@ -160,4 +192,71 @@ export function runnerPinProblems(source: string): string[] {
     if (problem) problems.push(`runner "${pin}": ${problem}`);
   }
   return problems;
+}
+
+/**
+ * The same source with its py-genlayer runner replaced.
+ *
+ * Only the header changes, and only the `py-genlayer:` dependency: the contract
+ * itself is byte-for-byte what was tested.
+ */
+export function withRunnerPin(source: string, pin: string): string {
+  const lines = source.split(/(\r?\n)/);
+  let inHeader = true;
+  return lines
+    .map((line) => {
+      if (!inHeader || /^\r?\n$/.test(line)) return line;
+      if (!/^\s*(\/\/|#|--)/.test(line)) {
+        inHeader = false;
+        return line;
+      }
+      return line.replace(/"Depends"\s*:\s*"py-genlayer:[^"]+"/, `"Depends": "${pin}"`);
+    })
+    .join("");
+}
+
+export type PinProbeResult =
+  | { status: "ok"; detail?: string }
+  | { status: "runner-missing"; detail: string }
+  | { status: "inconclusive"; detail: string };
+
+export interface PinNegotiation {
+  /** The pin to deploy with, or null when no candidate loaded. */
+  pin: string | null;
+  /** The source to deploy: the original, or the original re-pinned. */
+  code: string;
+  attempts: Array<{ pin: string; result: PinProbeResult }>;
+}
+
+/**
+ * Finds a runner pin the target network can load, cheapest first.
+ *
+ * The contract's own pin is probed first. Only if the network says that runner
+ * is missing are the other known, non-superseded runners tried, newest first.
+ * An inconclusive probe (unsupported method, rate limit, transport error) stops
+ * the negotiation and keeps the current pin: it is not evidence that any pin is
+ * wrong, and re-pinning on a guess would be worse than deploying as tested.
+ */
+export async function negotiateRunnerPin(
+  source: string,
+  probe: (code: string) => Promise<PinProbeResult>,
+  runners: ReadonlyArray<{ pin: string; superseded: boolean }> = KNOWN_PY_GENLAYER_RUNNERS,
+): Promise<PinNegotiation> {
+  const declared = runnerPinsInHeader(source).find((pin) => pin.startsWith("py-genlayer:")) ?? null;
+  const candidates = [
+    ...(declared ? [declared] : []),
+    ...runners.filter((runner) => !runner.superseded).map((runner) => runner.pin),
+  ].filter((pin, index, all) => all.indexOf(pin) === index);
+
+  const attempts: PinNegotiation["attempts"] = [];
+  for (const pin of candidates) {
+    const code = pin === declared ? source : withRunnerPin(source, pin);
+    const result = await probe(code);
+    attempts.push({ pin, result });
+    if (result.status === "ok") return { pin, code, attempts };
+    if (result.status === "inconclusive") {
+      return { pin: declared, code: source, attempts };
+    }
+  }
+  return { pin: null, code: source, attempts };
 }

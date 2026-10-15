@@ -1,5 +1,10 @@
 # Agent Tank submission — copy/paste guide
 
+> **Historical document — describes the accepted v0.1 build.** It is kept unedited as the
+> record of that version. What changed since — finality-gated settlement, appeals through
+> GenLayer, graduated remedies and the v2 contract — is in [`MILESTONE.md`](MILESTONE.md) and
+> [`CHANGELOG.md`](CHANGELOG.md).
+
 Everything the form at
 [portal.genlayer.foundation/agent-tank/hackathon/submit](https://portal.genlayer.foundation/agent-tank/hackathon/submit)
 asks for, pre-written. Closes **Sep 17, 15:30 UTC**.

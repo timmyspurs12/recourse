@@ -91,3 +91,26 @@ export function assertCanAdjudicate(order: Order, actor?: Actor): void {
     fail("UNAUTHORIZED", `${actor.handle} is not a party to ${order.id}`);
   }
 }
+
+/**
+ * Appeals cost money and re-run consensus, so only a party may ask for one,
+ * and the side it appeals for is derived from the authenticated identity —
+ * never from the request body. The protocol acting on its own behalf (the
+ * demo) must say which side it is appealing for.
+ */
+export function assertCanAppeal(order: Order, actor: Actor | undefined, onBehalfOf?: Party): Party {
+  if (!actor || isSystem(actor)) {
+    if (!onBehalfOf) {
+      fail("APPEAL_NOT_ALLOWED", "An appeal filed by the protocol must name the party it is for");
+    }
+    return onBehalfOf;
+  }
+  const party = partyFor(order, actor);
+  if (!party) {
+    fail("UNAUTHORIZED", `${actor.handle} is not a party to ${order.id}`, {
+      buyer: order.buyer.handle,
+      merchant: order.merchant.handle,
+    });
+  }
+  return party;
+}

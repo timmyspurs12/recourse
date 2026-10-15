@@ -1,5 +1,10 @@
 # Hostile review
 
+> **Historical document — describes the accepted v0.1 build.** It is kept unedited as the
+> record of that version. What changed since — finality-gated settlement, appeals through
+> GenLayer, graduated remedies and the v2 contract — is in [`MILESTONE.md`](MILESTONE.md) and
+> [`CHANGELOG.md`](CHANGELOG.md).
+
 A self-audit written in the voice of a judge trying to find the seam. Scores are out of 10 and
 are deliberately not generous. Everything claimed here is checkable from the repository.
 

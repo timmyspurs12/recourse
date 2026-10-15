@@ -198,6 +198,11 @@ export const createPurchaseSchema = z.object({
   deliveryDeadlineHours: z.number().int().positive().max(8760).optional(),
   /** Stop at ACCEPTED and require a separate x402 payment call. */
   deferFunding: z.boolean().optional(),
+  /**
+   * What a breach entitles the buyer to. `graduated_refund` lets GenLayer award
+   * part of the escrow; it is locked into the agreement before payment.
+   */
+  remedy: z.enum(["full_refund", "graduated_refund"]).optional(),
   recourseWindowHours: z.number().int().positive().max(8760).optional(),
   payment: z
     .object({
@@ -229,6 +234,11 @@ export const submitDeliverySchema = z.object({
       }),
     )
     .max(64),
+});
+
+/** The appellant is derived from the signature; only the reason is supplied. */
+export const appealSchema = z.object({
+  reason: z.string().max(1200).optional(),
 });
 
 export const openDisputeSchema = z.object({

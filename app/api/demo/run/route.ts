@@ -9,7 +9,7 @@ import { loadX402Config } from "@/integrations/x402/rail";
 
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ path: z.enum(["SUCCESS", "DISPUTE"]) });
+const schema = z.object({ path: z.enum(["SUCCESS", "DISPUTE", "PARTIAL"]) });
 
 /**
  * POST /api/demo/run — start a live protected purchase.
@@ -37,6 +37,9 @@ export async function POST(request: Request) {
       terms: BRIEF_TERMS,
       origin: "LIVE_RUN",
       deferFunding: true,
+      // The partial-delivery path runs under a graduated agreement, so the
+      // forum may award part of the escrow back.
+      remedy: path === "PARTIAL" ? "graduated_refund" : "full_refund",
     });
 
     const orderId = dossier.order.id;

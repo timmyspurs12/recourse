@@ -8,6 +8,11 @@ The two invariants everything else serves:
 
 > **I1.** An order settles at most once. `REFUND` and `RELEASE` can never both execute.
 > **I2.** A promise cannot change after money is committed to it.
+> **I3 (v0.2).** Money moves only on a final ruling — one the network can no longer appeal or
+> recompute — and only on a ruling made for the exact request the protocol sent.
+
+Sections 14–17 cover what v0.2 added; their tests are in `tests/v02.test.ts` and, for the
+contract, `tests/contracts/test_recourse_adjudicator.py`.
 
 ---
 
@@ -228,6 +233,10 @@ that a second client is unaffected, and that a retry window is reported.
 | Consensus never reached | Adjudication stays `PENDING`; the demo reports the timeout honestly; escrow `HELD` |
 | Contract execution errors | `FAILED` with the execution result; no ruling; escrow `HELD` |
 | Ruling unreadable or incoherent | Treated as no ruling; escrow `HELD` |
+| Ruling accepted but not final (v0.2) | `PROVISIONAL_RULING`; settlement refused with `RULING_NOT_FINAL`; escrow `HELD` |
+| Ruling bound to different inputs or another submitter (v0.2) | `FAILED` with the mismatch named; escrow `HELD` |
+| Network fails to decide after acceptance (v0.2) | Back to `ADJUDICATING`, dispute resubmittable; escrow `HELD` |
+| Appeal refused or unpayable (v0.2) | `APPEAL_WINDOW_CLOSED` / `APPEAL_UNAVAILABLE`; order and ruling unchanged |
 | Payment verification fails | `402` with a precise code; no order funded; no agreement locked |
 | Evidence payload unavailable | `EVIDENCE_UNAVAILABLE`; verification refuses to run rather than passing a delivery it cannot see |
 
@@ -238,6 +247,8 @@ The default in every failure path is **the money does not move**.
 ---
 
 ## 13. Known gaps
+
+*(See also the v0.2 gaps at the end of section 17.)*
 
 Stated plainly, because a security document that claims completeness is not credible.
 
@@ -252,3 +263,109 @@ Stated plainly, because a security document that claims completeness is not cred
   needs row-level locks or `SELECT … FOR UPDATE`, which the SQL schema supports.
 - **Rate limiting is per-process and per-IP.** Real throttling has to be per authenticated agent,
   which is blocked on the authentication gap above.
+
+---
+
+## 14. Settling on a ruling that can still change (v0.2)
+
+**Attack.** None needed — this was a correctness gap in v0.1. GenLayer reports a transaction
+`ACCEPTED` when validators agree, but an accepted result can be appealed and recomputed until the
+finality window closes. v0.1 treated `ACCEPTED` as final, read the ruling from the latest
+*non-final* state, and let settlement move escrow on it. Had the ruling been overturned on appeal,
+the money would already have gone the other way. The seeded flagship record `RC-000042` shows it:
+stored as `FINALIZED` by the protocol while the network said `ACCEPTED`.
+
+**Defence.**
+
+1. **The state machine.** An accepted ruling lands in `PROVISIONAL_RULING` (or `APPEALED`); there
+   is no edge from either to any settlement state. Ruled states are entered only on finality.
+2. **Finalized reads.** The forum reads a provisional ruling from `latest-nonfinal` and a final one
+   only from `latest-final`, and reports `FINALIZED` only for a network status of `FINALIZED`.
+3. **Defence in depth in `settle`.** A ruled order whose adjudication is not stamped `FINAL` is
+   refused with `RULING_NOT_FINAL` — and a v0.1 record is first re-confirmed on-chain: only a
+   `FINALIZED` transaction whose finalized ruling awards the same thing is accepted.
+4. **Status table.** v0.1 carried the v0.5 code table, under which v0.6's code 13
+   (`LEADER_REVEALING`, still being decided) read as `LEADER_TIMEOUT`. The v0.6 table is used, and
+   an unknown code is pending, never failed.
+
+**Tests.** *an accepted ruling is provisional: escrow stays held and settlement is refused* · *a
+ruling recorded on acceptance under v0.1 rules is re-confirmed on-chain before it settles* · *no
+edge settles a provisional ruling* · *v0.6 status codes: 13 is a transaction still being decided*.
+
+---
+
+## 15. Pre-empting or recycling a ruling (v0.2)
+
+**Attack.** On the v1 contract, rulings were keyed by dispute id alone, `adjudicate` was public,
+and a repeat request for an existing id returned early. Dispute ids are predictable
+(`dsp_rc-000055` follows `RC-000055`). So anyone could call `adjudicate("dsp_rc-000056", …)` with a
+payload of their choosing — every term passed, merchant wins — before the protocol did; the
+protocol's own request would be a no-op, and it would read and settle on the attacker's ruling. The
+same thing happened *without* an attacker whenever ids repeated: reseeding a ledger, or two clones
+sharing the committed default contract, both reuse `dsp_rc-0000NN`.
+
+**Defence.**
+
+1. **v2 contract:** rulings are stored under `<sender>/<dispute_id>` with the inputs hash they were
+   made against. Another caller's ruling lives under another key; a second request for the same key
+   with different inputs is refused (`different inputs`), never silently ignored.
+2. **Forum:** a v2 ruling must echo the inputs hash and the submitter the protocol recorded. Against
+   a v1 contract, the separately stored inputs hash must match. Otherwise the outcome is `FAILED`
+   and names the mismatch.
+3. **Redeploy safety:** each adjudication is polled at the contract address it was sent to, so
+   in-flight disputes survive a redeploy instead of being read from a contract that never saw them.
+
+**Tests.** *rulings are namespaced by submitter* · *a reused dispute id with different inputs is
+refused* (contract) · *on a v1 contract, a ruling recorded against different inputs is refused* ·
+*a v2 ruling must echo the inputs and the signer the protocol submitted* (forum).
+
+---
+
+## 16. Abusing appeals (v0.2)
+
+**Attack.** File appeals to stall settlement, appeal a ruling you won, appeal in someone else's
+name, or appeal repeatedly to burn the protocol's bond.
+
+**Defence.**
+
+- **Who.** Only a party; the appellant is derived from the request signature, never the body. The
+  side a ruling went *for* cannot appeal it (either side may appeal a split).
+- **How often.** Once per party per ruling, one appeal in flight at a time. The Postgres schema
+  encodes both (`UNIQUE (adjudication_id, requested_by)` and a partial unique index on pending).
+- **When.** Only while the order holds a provisional ruling *and* the network's `canAppeal` says the
+  active decision can still be appealed. A refused appeal changes nothing.
+- **Cost.** The charge is the network's quote (`getAppealCharge`), paid exactly; the endpoint shares
+  the adjudication rate limit. Stalling is bounded by GenLayer itself: the finality window pauses
+  only during appeal voting, and shrinks after each failed appeal.
+- **Resolution.** An appeal is resolved only on evidence its round ran (in-flight status, higher
+  round count, failed-appeal counter, new decision id, or finality) — not on the first `ACCEPTED`
+  seen after filing, which may predate the network registering it.
+
+**Tests.** *appeal rules: only a losing party, once each, one at a time, and only while appealable*
+· *when the network refuses or cannot take an appeal, nothing moves* · *an appeal the network has
+not registered yet is not mistaken for a resolved one* · *an appeal round that finishes between
+two polls is still detected*.
+
+---
+
+## 17. Graduated remedies (v0.2)
+
+**Attack.** Award a partial refund the agreement never allowed, or exploit rounding.
+
+**Defence.** The remedy mode is read from the **locked** agreement, so neither party can change it
+after payment, and the contract refuses `SPLIT` in all-or-nothing mode — both when the leader
+proposes it and when a validator checks it. A split must refund strictly between 0 and 100%; one
+that rounds to an extreme is a different decision and is refused. Validators must agree exactly on
+materiality and on the violated terms; only the amount has a tolerance (one 10-point step).
+Settlement uses integer micro-units: the buyer's share is rounded **down** and the merchant gets the
+exact remainder, so the legs always sum to the escrow and rounding can never pay out more than was
+held.
+
+**Tests.** *split arithmetic is exact* (500 randomised splits) · *a split that refunds nothing or
+everything is refused at settlement* · *the split is refused when the agreement is all-or-nothing*
+· *validator rejects a materiality disagreement however small* (contract).
+
+**v0.2 gaps.** The appeal bond is paid by the protocol's adjudication key, not by the appellant, so
+appeals are rate-limited rather than priced to the appellant. Leader appeals (against
+`UNDETERMINED` or timeouts) are not used; those referrals are resubmitted instead.
+

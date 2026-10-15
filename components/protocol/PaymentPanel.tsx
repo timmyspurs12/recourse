@@ -10,6 +10,7 @@ const escrowTone: Record<EscrowState, "neutral" | "protected" | "pass"> = {
   HELD: "protected",
   RELEASED: "pass",
   REFUNDED: "protected",
+  SPLIT: "protected",
 };
 
 /**

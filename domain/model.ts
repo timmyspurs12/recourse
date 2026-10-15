@@ -52,15 +52,38 @@ export interface AgreementTerm {
   description?: string;
 }
 
+/**
+ * What a breach entitles the buyer to.
+ *
+ * `full_refund` is all-or-nothing: the forum decides whether a breach is
+ * material, and a material breach returns the whole escrow. `graduated_refund`
+ * lets the forum award part of it — a SPLIT ruling with a refund in basis
+ * points — when a breach is real but the delivery still carried some of the
+ * value. Which one applies is part of the locked agreement, so neither party
+ * can change it after payment.
+ */
+export const REMEDY_POLICIES = ["full_refund", "graduated_refund"] as const;
+export type RemedyPolicy = (typeof REMEDY_POLICIES)[number];
+
 export interface RefundPolicy {
   type: "mandatory_term_breach";
-  settlement: "full_refund";
+  settlement: RemedyPolicy;
   /** Hours after delivery during which the buyer may still open a dispute. */
   recourseWindowHours: number;
 }
 
+/**
+ * Agreement document versions.
+ *
+ * `recourse/0.2` documents are created under finality-gated settlement and may
+ * opt into graduated remedies. `recourse/0.1` documents stay valid and keep
+ * verifying against the hashes they were locked with.
+ */
+export const AGREEMENT_VERSION = "recourse/0.2" as const;
+export type AgreementVersion = "recourse/0.1" | "recourse/0.2";
+
 export interface AgreementDocument {
-  version: "recourse/0.1";
+  version: AgreementVersion;
   orderId: string;
   buyer: string;
   merchant: string;
@@ -86,7 +109,7 @@ export interface Agreement {
 
 export type PaymentRailId = "x402" | "simulated";
 
-export type EscrowState = "NONE" | "HELD" | "RELEASED" | "REFUNDED";
+export type EscrowState = "NONE" | "HELD" | "RELEASED" | "REFUNDED" | "SPLIT";
 
 export interface Payment {
   id: string;
@@ -203,7 +226,8 @@ export interface Dispute {
   ref: string;
   title: string;
   claim: string;
-  claimedRemedy: "FULL_REFUND";
+  /** What the claimant can be awarded under the locked agreement. */
+  claimedRemedy: "FULL_REFUND" | "PROPORTIONAL_REFUND";
   status: DisputeStatus;
   openedBy: AgentRole;
   openedAt: string;
@@ -212,22 +236,137 @@ export interface Dispute {
 
 /* ----------------------------------------------------------- adjudication */
 
+/**
+ * Where an adjudication stands.
+ *
+ * DECIDED and FINALIZED are deliberately different words. GenLayer reports a
+ * transaction ACCEPTED when its validators reach consensus, but an accepted
+ * result can still be appealed and recomputed until the finality window
+ * closes. DECIDED is that provisional state; only FINALIZED moves money.
+ * APPEALED means an appeal round is in progress against the provisional
+ * ruling.
+ */
 export type AdjudicationStatus =
   | "NOT_REQUIRED"
   | "SUBMITTED"
   | "PENDING"
+  | "DECIDED"
+  | "APPEALED"
   | "FINALIZED"
   | "FAILED";
 
-export type Decision = "BUYER_WINS" | "MERCHANT_WINS";
+export type Decision = "BUYER_WINS" | "MERCHANT_WINS" | "SPLIT";
+
+/** How the forum may remedy a breach, derived from the agreement's policy. */
+export type RemedyMode = "ALL_OR_NOTHING" | "GRADUATED";
+
+/** Whole escrow, in basis points. */
+export const FULL_REFUND_BPS = 10_000;
 
 export interface Ruling {
   decision: Decision;
   materialBreach: boolean;
   violatedTerms: string[];
   satisfiedTerms: string[];
-  recommendedSettlement: "REFUND" | "RELEASE";
+  recommendedSettlement: "REFUND" | "RELEASE" | "SPLIT";
+  /**
+   * Share of the escrow owed to the buyer, in basis points: 10000 is a full
+   * refund, 0 a full release. Rulings recorded before v0.2 carry no value and
+   * are read through `refundBpsOf`, which derives it from the decision.
+   */
+  refundBps?: number;
   reasoningSummary: string;
+  /** "recourse.ruling/2" for v2 contracts; absent on v1 rulings. */
+  schema?: string;
+  remedyMode?: RemedyMode;
+  /** The inputs hash the contract recorded alongside the ruling (v2). */
+  inputsHash?: string | null;
+  /** The address the contract recorded as having requested the ruling (v2). */
+  submitter?: string | null;
+}
+
+/** The refund a ruling awards, for rulings from either contract generation. */
+export function refundBpsOf(ruling: Pick<Ruling, "decision" | "refundBps">): number {
+  if (typeof ruling.refundBps === "number" && Number.isInteger(ruling.refundBps)) {
+    return ruling.refundBps;
+  }
+  return ruling.decision === "BUYER_WINS" ? FULL_REFUND_BPS : 0;
+}
+
+/** "BUYER_WINS (full refund)", "SPLIT (60% refund)", "MERCHANT_WINS (release)". */
+export function describeAward(ruling: Pick<Ruling, "decision" | "refundBps">): string {
+  const bps = refundBpsOf(ruling);
+  if (ruling.decision === "SPLIT") return `SPLIT (${bps / 100}% refund)`;
+  return ruling.decision === "BUYER_WINS" ? "BUYER_WINS (full refund)" : "MERCHANT_WINS (release)";
+}
+
+/** Whether two rulings award the same thing. Prose is never compared. */
+export function sameAward(
+  a: Pick<Ruling, "decision" | "refundBps">,
+  b: Pick<Ruling, "decision" | "refundBps">,
+): boolean {
+  return a.decision === b.decision && refundBpsOf(a) === refundBpsOf(b);
+}
+
+/** Finality of a recorded ruling. Only FINAL rulings are ever settled. */
+export type RulingFinality = "PROVISIONAL" | "FINAL";
+
+/**
+ * GenLayer's view of a transaction's lifecycle, as last reported.
+ *
+ * `decisionId` identifies the decision an appeal is bound to;
+ * `resolutionAction` of "Finalize" means the finality window has elapsed and
+ * anyone may submit finalization.
+ */
+export interface ConsensusLifecycle {
+  storedStatus: string | null;
+  projectedStatus: string | null;
+  resolutionAction: string | null;
+  decisionId: string | null;
+  decisionActive: boolean | null;
+}
+
+/** What a ruling awarded, captured for an appeal record. */
+export interface RulingSnapshot {
+  decision: Decision;
+  refundBps: number;
+  violatedTerms: string[];
+}
+
+/**
+ * One appeal against a provisional ruling.
+ *
+ * GenLayer appeals re-evaluate the *same* transaction with a larger validator
+ * committee; there is no separate appeal transaction and no new evidence. The
+ * record therefore tracks the transaction it challenged, the decision it was
+ * bound to, and the network signals the protocol watched to know when the
+ * appeal round was over.
+ */
+export interface AppealRecord {
+  id: string;
+  requestedBy: AgentRole;
+  /** The handle that asked for the appeal. */
+  requestedByHandle: string;
+  /** The appellant's stated reason. Recorded, not sent on-chain. */
+  reason: string;
+  filedAt: string;
+  transactionHash: string;
+  /** Bond plus appeal funding the network quoted, in wei. */
+  chargeWei: string | null;
+  /** Address that paid the charge. In this release, the protocol's key. */
+  paidBy: string | null;
+  /** The decision the appeal was bound to, when the network reported one. */
+  decisionId: string | null;
+  /** Network signals at filing, compared on later polls. */
+  roundsAtFiling: number | null;
+  failedAppealsAtFiling: number | null;
+  /** Set once an appeal round has been seen in progress. */
+  observedInFlight: boolean;
+  rulingBefore: RulingSnapshot;
+  rulingAfter: RulingSnapshot | null;
+  /** UPHELD: the award stood. REVISED: the decision or the refund changed. */
+  outcome: "PENDING" | "UPHELD" | "REVISED";
+  resolvedAt: string | null;
 }
 
 /**
@@ -307,11 +446,45 @@ export interface Adjudication {
   fees: AdjudicationFeeQuote | null;
   /** Consumption and refund, when a receipt reported them. */
   feeAccounting: AdjudicationFeeAccounting | null;
+  /*
+   * v0.2 fields. Optional so that records written before them stay readable;
+   * the presenter labels such records for what they are.
+   */
+  /** Remedy mode requested in the payload. */
+  remedyMode?: RemedyMode;
+  /**
+   * Address that signed the adjudicate transaction. v2 contracts store each
+   * ruling under its submitter, so this is part of how the ruling is read.
+   */
+  submitter?: string | null;
+  /** Contract generation the ruling is read from (1 or 2), once known. */
+  contractVersion?: number | null;
+  /** PROVISIONAL until the network finalizes; only FINAL is ever settled. */
+  finality?: RulingFinality | null;
+  /** When a ruling first became readable, provisional or not. */
+  decidedAt?: string | null;
+  /** Consensus rounds the receipt reported at the last poll. */
+  rounds?: number | null;
+  lifecycle?: ConsensusLifecycle | null;
+  appeals?: AppealRecord[];
+  /** Finalization transaction the protocol submitted, when it had to. */
+  finalizationTx?: string | null;
+  /** Set when finality of a pre-v0.2 ruling was re-confirmed on-chain. */
+  finalityConfirmedAt?: string | null;
 }
 
 /* ------------------------------------------------------------- settlement */
 
-export type SettlementOutcome = "RELEASED" | "REFUNDED";
+export type SettlementOutcome = "RELEASED" | "REFUNDED" | "PARTIAL_REFUND";
+
+/** One movement of money out of escrow. A split settlement has two. */
+export interface SettlementLeg {
+  party: AgentRole;
+  to: string;
+  amount: Money;
+  execution: "ONCHAIN" | "SIGNATURE_VERIFIED_LOCAL_ESCROW";
+  transactionHash: string | null;
+}
 
 export interface Settlement {
   id: string;
@@ -327,6 +500,10 @@ export interface Settlement {
   execution: "ONCHAIN" | "SIGNATURE_VERIFIED_LOCAL_ESCROW";
   transactionHash: string | null;
   executedAt: string;
+  /** Share of the escrow returned to the buyer, in basis points (v0.2). */
+  refundBps?: number;
+  /** Every movement out of escrow (v0.2). */
+  legs?: SettlementLeg[];
 }
 
 /* ------------------------------------------------------------------ order */
@@ -340,9 +517,13 @@ export const ORDER_STATES = [
   "FULFILLED",
   "DISPUTED",
   "ADJUDICATING",
+  "PROVISIONAL_RULING",
+  "APPEALED",
   "BUYER_WON",
   "MERCHANT_WON",
+  "SPLIT_AWARDED",
   "REFUNDED",
+  "PARTIALLY_REFUNDED",
   "RELEASED",
   "CANCELLED",
 ] as const;
@@ -360,9 +541,13 @@ export const PHASE_BY_STATE: Record<OrderState, LifecyclePhase> = {
   FULFILLED: "PROOF",
   DISPUTED: "JUDGMENT",
   ADJUDICATING: "JUDGMENT",
+  PROVISIONAL_RULING: "JUDGMENT",
+  APPEALED: "JUDGMENT",
   BUYER_WON: "JUDGMENT",
   MERCHANT_WON: "JUDGMENT",
+  SPLIT_AWARDED: "JUDGMENT",
   REFUNDED: "SETTLEMENT",
+  PARTIALLY_REFUNDED: "SETTLEMENT",
   RELEASED: "SETTLEMENT",
   CANCELLED: "SETTLEMENT",
 };
@@ -397,8 +582,13 @@ export const EVENT_TYPES = [
   "DISPUTE_OPENED",
   "ADJUDICATION_SUBMITTED",
   "ADJUDICATION_FAILED",
+  "RULING_PROVISIONAL",
+  "APPEAL_FILED",
+  "APPEAL_RESOLVED",
+  "FINALIZATION_SUBMITTED",
   "RULING_FINALIZED",
   "REFUND_EXECUTED",
+  "PARTIAL_REFUND_EXECUTED",
   "MERCHANT_PAID",
   "ORDER_CANCELLED",
 ] as const;

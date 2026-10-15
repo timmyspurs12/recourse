@@ -1,5 +1,10 @@
 # Competitive implementation audit
 
+> **Historical document — describes the accepted v0.1 build.** It is kept unedited as the
+> record of that version. What changed since — finality-gated settlement, appeals through
+> GenLayer, graduated remedies and the v2 contract — is in [`MILESTONE.md`](MILESTONE.md) and
+> [`CHANGELOG.md`](CHANGELOG.md).
+
 Performed against the six builds in the
 [Agent Tank builds directory](https://portal.genlayer.foundation/agent-tank/hackathon/builds/),
 with the primary comparison against the submitted project described as *"Agentic commerce escrow on

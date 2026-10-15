@@ -3,6 +3,7 @@ import type {
   AdjudicationFeeAccounting,
   AdjudicationFeeQuote,
   Agreement,
+  ConsensusLifecycle,
   Delivery,
   Dispute,
   LedgerEvent,
@@ -114,6 +115,11 @@ export interface AdjudicationPayload {
   /** Untrusted merchant text, clearly framed as data. */
   merchantStatement: string;
   buyerClaim: string;
+  /**
+   * Whether the forum may award a partial refund. Taken from the locked
+   * agreement; a v1 contract ignores it and rules all-or-nothing.
+   */
+  remedyMode?: "ALL_OR_NOTHING" | "GRADUATED";
 }
 
 export interface AdjudicationOutcome {
@@ -138,6 +144,39 @@ export interface AdjudicationOutcome {
   feeAccounting?: AdjudicationFeeAccounting | null;
   /** Pending-queue position while the transaction has not activated yet. */
   queuePosition?: number | null;
+  /** Address that signed the submission (v2 contracts key rulings by it). */
+  submitter?: string | null;
+  /** Contract generation the forum detected: 1 or 2. */
+  contractVersion?: number | null;
+  /** The network's lifecycle for the transaction, when it could be read. */
+  lifecycle?: ConsensusLifecycle | null;
+  /** Failed appeals the network counted (Studio reports this). */
+  failedAppeals?: number | null;
+  /** True while the network reports an appeal round in progress. */
+  appealInFlight?: boolean;
+  /** Finalization the forum submitted on the protocol's behalf, if any. */
+  finalizationTx?: string | null;
+}
+
+/**
+ * The result of asking the forum to appeal a provisional ruling.
+ *
+ * REFUSED means the network says the decision can no longer be appealed (the
+ * window closed or the decision changed). FAILED means the appeal could not be
+ * paid for or broadcast. Neither moves the order.
+ */
+export interface AppealSubmission {
+  status: "FILED" | "REFUSED" | "FAILED";
+  /** Bond plus appeal funding, in wei, as quoted by the network. */
+  chargeWei: string | null;
+  decisionId: string | null;
+  /** Address that paid for the appeal. */
+  paidBy: string | null;
+  /** Network signals at filing, for telling later when the round is over. */
+  rounds: number | null;
+  failedAppeals: number | null;
+  networkStatus: string | null;
+  reason: string | null;
 }
 
 export interface AdjudicationForum {
@@ -152,11 +191,27 @@ export interface AdjudicationForum {
    * transaction — consensus takes tens of seconds and must not block a request.
    */
   submit(request: AdjudicationRequest): Promise<AdjudicationOutcome>;
-  /** Polls a submitted adjudication for finality. Never fabricates progress. */
+  /**
+   * Polls a submitted adjudication. Never fabricates progress.
+   *
+   * DECIDED carries the provisional ruling (latest non-final state); FINALIZED
+   * carries the ruling read from finalized state. `submitter` and `inputsHash`
+   * let the forum refuse a ruling that was not made for this request.
+   */
   poll(input: {
     disputeId: string;
     transactionHash: string;
+    /** The contract the adjudication was sent to; defaults to the configured one. */
+    contractAddress?: string | null;
+    submitter?: string | null;
+    inputsHash?: string | null;
+    contractVersion?: number | null;
   }): Promise<AdjudicationOutcome>;
+  /**
+   * Appeals the provisional ruling of a submitted adjudication. Optional: a
+   * forum that cannot appeal simply does not offer it.
+   */
+  appeal?(input: { disputeId: string; transactionHash: string }): Promise<AppealSubmission>;
 }
 
 /* ------------------------------------------------------------ payment port */

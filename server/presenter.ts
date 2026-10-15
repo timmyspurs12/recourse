@@ -1,4 +1,5 @@
 import { formatGen } from "@/domain/shared/money";
+import { describeAward, refundBpsOf } from "@/domain/model";
 import type {
   Adjudication as DomainAdjudication,
   Agreement as DomainAgreement,
@@ -17,6 +18,7 @@ import type {
   Agent,
   Agreement,
   AgreementTerm,
+  AppealView,
   Attested,
   CaseRecord,
   Delivery,
@@ -125,7 +127,8 @@ export function presentAgreement(agreement: DomainAgreement, order: DomainOrder)
     title: order.resource.name,
     status: agreement.lockedAt ? "LOCKED" : "OFFERED",
     terms,
-    breachRemedy: "FULL_REFUND",
+    breachRemedy:
+      agreement.document.refundPolicy.settlement === "graduated_refund" ? "PARTIAL_REFUND" : "FULL_REFUND",
     refundOnMaterialBreach: true,
     document: agreement.document as unknown as Record<string, unknown>,
     createdAt: agreement.document.createdAt,
@@ -243,7 +246,11 @@ export function presentVerification(
   if (adjudication?.status === "FINALIZED" && adjudication.ruling) {
     status = "COMPLETE";
     rationale = adjudication.ruling.reasoningSummary;
-  } else if (adjudication && (adjudication.status === "SUBMITTED" || adjudication.status === "PENDING")) {
+  } else if (
+    adjudication &&
+    ["SUBMITTED", "PENDING", "DECIDED", "APPEALED"].includes(adjudication.status)
+  ) {
+    // A provisional ruling is still judgment in progress: it can change.
     status = "IN_ADJUDICATION";
   } else if (dispute) {
     status = "ADJUDICATION_REQUIRED";
@@ -286,6 +293,8 @@ function presentAdjudication(
     NOT_REQUIRED: "NOT_SUBMITTED",
     SUBMITTED: "QUEUED",
     PENDING: "IN_PROGRESS",
+    DECIDED: "PROVISIONAL",
+    APPEALED: "APPEALED",
     FINALIZED: "FINALIZED",
     FAILED: "UNAVAILABLE",
   };
@@ -390,6 +399,98 @@ function presentAdjudication(
           provenance: "NOT_AVAILABLE",
           note: "Validator votes are published with the transaction receipt once consensus completes.",
         },
+    finality: presentFinality(adjudication),
+    appeals: (adjudication.appeals ?? []).map(presentAppeal),
+    remedyMode: adjudication.remedyMode ?? null,
+    contractVersion: adjudication.contractVersion ?? null,
+  };
+}
+
+/**
+ * How final a ruling is, in the network's terms and in plain words.
+ *
+ * A record from v0.1 of the protocol has no finality field. If it was
+ * "finalized" while the network said ACCEPTED, it is labelled as exactly that —
+ * settled on acceptance, under the old rule — rather than upgraded to FINAL.
+ */
+function presentFinality(adjudication: DomainAdjudication): Adjudication["finality"] {
+  const networkStatus = adjudication.networkStatus;
+  const decisionId = adjudication.lifecycle?.decisionId ?? null;
+  const nextAction = adjudication.lifecycle?.resolutionAction ?? null;
+
+  if (adjudication.finality === "FINAL") {
+    return {
+      value: {
+        state: "FINAL",
+        label: "Final",
+        detail: adjudication.finalityConfirmedAt
+          ? "Recorded under v0.1 on acceptance, then confirmed FINALIZED on-chain with the same award before settlement."
+          : "GenLayer finalized this ruling. It can no longer be appealed, and settlement follows it.",
+        networkStatus,
+        decisionId,
+        nextAction,
+      },
+      provenance: "LIVE",
+    };
+  }
+  if (adjudication.status === "DECIDED" || adjudication.status === "APPEALED") {
+    return {
+      value: {
+        state: "PROVISIONAL",
+        label: adjudication.status === "APPEALED" ? "Under appeal" : "Provisional",
+        detail:
+          adjudication.status === "APPEALED"
+            ? "An appeal is re-running consensus on this ruling with a larger validator committee. Escrow stays held."
+            : nextAction === "Finalize"
+              ? "The appeal window has elapsed; finalization is pending. Escrow stays held until GenLayer reports it FINALIZED."
+              : "GenLayer accepted this ruling. Until its finality window closes it can be appealed and recomputed, so escrow stays held.",
+        networkStatus,
+        decisionId,
+        nextAction,
+      },
+      provenance: "LIVE",
+    };
+  }
+  if (adjudication.status === "FINALIZED" && adjudication.ruling) {
+    const onAcceptance = (networkStatus ?? "").toUpperCase().startsWith("ACCEPTED");
+    return {
+      value: {
+        state: "LEGACY_ACCEPTANCE",
+        label: onAcceptance ? "Recorded on acceptance (v0.1)" : "Recorded under v0.1",
+        detail: onAcceptance
+          ? "This ruling was recorded by v0.1 of the protocol, which treated an ACCEPTED transaction as final. Under v0.2 it would have waited for FINALIZED before any settlement."
+          : "This ruling was recorded by v0.1 of the protocol, before finality was tracked separately.",
+        networkStatus,
+        decisionId,
+        nextAction,
+      },
+      provenance: "LIVE",
+    };
+  }
+  return {
+    value: null,
+    provenance: "NOT_AVAILABLE",
+    note: "No ruling has been reached yet, so there is nothing to finalize.",
+  };
+}
+
+function presentAppeal(appeal: NonNullable<DomainAdjudication["appeals"]>[number]): AppealView {
+  return {
+    id: appeal.id,
+    requestedBy: appeal.requestedBy,
+    handle: appeal.requestedByHandle,
+    reason: appeal.reason,
+    filedAt: appeal.filedAt,
+    charge: attest(
+      appeal.chargeWei ? formatGen(appeal.chargeWei) ?? `${appeal.chargeWei} wei` : null,
+      "LIVE",
+      "The network did not report a charge for this appeal.",
+    ),
+    paidBy: appeal.paidBy,
+    outcome: appeal.outcome,
+    before: describeAward(appeal.rulingBefore),
+    after: appeal.rulingAfter ? describeAward(appeal.rulingAfter) : null,
+    resolvedAt: appeal.resolvedAt,
   };
 }
 
@@ -398,8 +499,10 @@ function presentRuling(
   verification: DomainVerification | null,
   agreement: DomainAgreement,
 ): Ruling | null {
-  if (!adjudication?.ruling || adjudication.status !== "FINALIZED") return null;
+  if (!adjudication?.ruling) return null;
+  if (!["DECIDED", "APPEALED", "FINALIZED"].includes(adjudication.status)) return null;
   const ruling = adjudication.ruling;
+  const refundPercent = refundBpsOf(ruling) / 100;
 
   return {
     id: `rul_${adjudication.id}`,
@@ -417,8 +520,11 @@ function presentRuling(
       };
     }),
     rationale: [ruling.reasoningSummary],
-    remedy: ruling.recommendedSettlement === "REFUND" ? "FULL_REFUND" : "NONE",
-    finalizedAt: adjudication.finalizedAt ?? adjudication.submittedAt,
+    remedy:
+      ruling.decision === "SPLIT" ? "PARTIAL_REFUND" : ruling.decision === "BUYER_WINS" ? "FULL_REFUND" : "NONE",
+    refundPercent,
+    final: adjudication.status === "FINALIZED",
+    finalizedAt: adjudication.finalizedAt ?? adjudication.decidedAt ?? adjudication.submittedAt,
     provenance: "LIVE",
   };
 }
@@ -449,7 +555,7 @@ export function presentDispute(
     openedAt: dispute.openedAt,
     status: statusMap[dispute.status],
     claim: dispute.claim,
-    claimedRemedy: "FULL_REFUND",
+    claimedRemedy: dispute.claimedRemedy === "PROPORTIONAL_REFUND" ? "PARTIAL_REFUND" : "FULL_REFUND",
     adjudication: presentAdjudication(adjudication, dispute.id, agreement.hash, evidenceHash),
     ruling: presentRuling(adjudication, verification, agreement),
   };
@@ -462,23 +568,41 @@ export function presentSettlement(
   adjudication: DomainAdjudication | null,
 ): Settlement | null {
   if (!settlement) {
-    // A ruling exists but the money has not moved yet. That is a real protocol
-    // state and gets its own honest surface rather than a blank panel.
-    if (adjudication?.status === "FINALIZED" && adjudication.ruling) {
+    if (!adjudication?.ruling) return null;
+    const ruling = adjudication.ruling;
+    const outcome: Settlement["outcome"] =
+      ruling.decision === "SPLIT" ? "PARTIAL_REFUND" : ruling.decision === "BUYER_WINS" ? "REFUNDED" : "RELEASED";
+    const pending = {
+      id: `stl_pending_${order.id}`,
+      orderId: order.id,
+      disputeId: dispute?.id ?? null,
+      outcome,
+      amount: order.amount,
+      buyerId: order.buyer.handle,
+      merchantId: order.merchant.handle,
+      reason: ruling.reasoningSummary,
+      settledAt: null,
+      transaction: attest<string>(null, "NOT_AVAILABLE", "Settlement has not been executed."),
+      refundPercent: refundBpsOf(ruling) / 100,
+    };
+
+    // Provisional: a real protocol state with its own honest surface.
+    if (adjudication.status === "DECIDED" || adjudication.status === "APPEALED") {
       return {
-        id: `stl_pending_${order.id}`,
-        orderId: order.id,
-        disputeId: dispute?.id ?? null,
-        outcome: adjudication.ruling.recommendedSettlement === "REFUND" ? "REFUNDED" : "RELEASED",
-        status: "UNAVAILABLE",
-        amount: order.amount,
-        buyerId: order.buyer.handle,
-        merchantId: order.merchant.handle,
-        reason: adjudication.ruling.reasoningSummary,
-        settledAt: null,
-        transaction: attest<string>(null, "NOT_AVAILABLE", "Settlement has not been executed."),
+        ...pending,
+        status: "PENDING",
         unavailableReason:
-          "The ruling is final but settlement has not been executed for this order yet.",
+          adjudication.status === "APPEALED"
+            ? "The ruling is under appeal. Escrow stays held until GenLayer finalizes the outcome."
+            : "The ruling is provisional: it can still be appealed. Escrow stays held until GenLayer finalizes it.",
+      };
+    }
+    // Final, not yet executed.
+    if (adjudication.status === "FINALIZED") {
+      return {
+        ...pending,
+        status: "UNAVAILABLE",
+        unavailableReason: "The ruling is final but settlement has not been executed for this order yet.",
       };
     }
     return null;
@@ -500,6 +624,15 @@ export function presentSettlement(
       "LIVE",
       "Escrow movement was recorded by the protocol. No chain transaction was broadcast in this environment.",
     ),
+    legs: settlement.legs?.map((leg) => ({ party: leg.party, to: leg.to, amount: leg.amount })),
+    refundPercent:
+      typeof settlement.refundBps === "number"
+        ? settlement.refundBps / 100
+        : settlement.outcome === "REFUNDED"
+          ? 100
+          : settlement.outcome === "RELEASED"
+            ? 0
+            : null,
   };
 }
 
@@ -514,8 +647,12 @@ const ACTOR_BY_EVENT: Record<string, TransactionEvent["actor"]> = {
   DISPUTE_OPENED: "BUYER",
   ADJUDICATION_SUBMITTED: "GENLAYER",
   ADJUDICATION_FAILED: "GENLAYER",
+  RULING_PROVISIONAL: "GENLAYER",
+  APPEAL_RESOLVED: "GENLAYER",
+  FINALIZATION_SUBMITTED: "PROTOCOL",
   RULING_FINALIZED: "GENLAYER",
   REFUND_EXECUTED: "PROTOCOL",
+  PARTIAL_REFUND_EXECUTED: "PROTOCOL",
   MERCHANT_PAID: "PROTOCOL",
   ORDER_CANCELLED: "PROTOCOL",
 };
@@ -528,7 +665,12 @@ export function presentEvents(events: LedgerEvent[], provenance: Provenance): Tr
     state: event.state as OrderStatus,
     phase: event.phase,
     label: event.summary,
-    actor: ACTOR_BY_EVENT[event.type] ?? "PROTOCOL",
+    actor:
+      event.type === "APPEAL_FILED"
+        ? event.detail?.requestedBy === "BUYER"
+          ? "BUYER"
+          : "MERCHANT"
+        : ACTOR_BY_EVENT[event.type] ?? "PROTOCOL",
     detail: event.detail
       ? Object.entries(event.detail)
           .filter(([, value]) => value !== null && value !== "")
@@ -591,10 +733,28 @@ export function describeState(dossier: DomainDossier): string {
       return "The buyer opened a recourse claim. Escrow remains held.";
     case "ADJUDICATING":
       return "Contested terms were submitted to GenLayer. Escrow remains held pending consensus.";
+    case "PROVISIONAL_RULING":
+      return dossier.adjudication?.ruling
+        ? `GenLayer reached a provisional ruling: ${describeAward(dossier.adjudication.ruling)}. It can still be appealed, so escrow stays held until it is final.`
+        : "GenLayer reached a provisional ruling. Escrow stays held until it is final.";
+    case "APPEALED":
+      return "The provisional ruling is under appeal: a larger GenLayer committee is re-running consensus. Escrow remains held.";
     case "BUYER_WON":
-      return "Adjudication found a material breach. Refund authorised.";
+      return "The final ruling found a material breach. Refund authorised.";
     case "MERCHANT_WON":
-      return "Adjudication found no material breach. Release authorised.";
+      return "The final ruling found no material breach. Release authorised.";
+    case "SPLIT_AWARDED":
+      return dossier.adjudication?.ruling
+        ? `The final ruling found a partial breach and awarded ${refundBpsOf(dossier.adjudication.ruling) / 100}% of the escrow to the buyer.`
+        : "The final ruling awarded a partial refund.";
+    case "PARTIALLY_REFUNDED": {
+      const legs = dossier.settlement?.legs ?? [];
+      const refund = legs.find((leg) => leg.party === "BUYER")?.amount.amount;
+      const release = legs.find((leg) => leg.party === "MERCHANT")?.amount.amount;
+      return refund && release
+        ? `$${refund} returned to the buyer agent and $${release} released to the merchant agent.`
+        : `${value} split between the buyer and merchant agents.`;
+    }
     case "REFUNDED":
       return `${value} returned to the buyer agent.`;
     case "RELEASED":
@@ -608,7 +768,15 @@ export function describeState(dossier: DomainDossier): string {
 
 export function presentCase(dossier: DomainDossier): CaseRecord | null {
   if (!dossier.dispute) return null;
-  const ruling = dossier.adjudication?.ruling ?? null;
+  // A case shows an outcome only once it is final; before that it is a stage.
+  const final = dossier.adjudication?.status === "FINALIZED";
+  const ruling = final ? (dossier.adjudication?.ruling ?? null) : null;
+  const stage =
+    dossier.adjudication?.status === "APPEALED"
+      ? "UNDER_APPEAL"
+      : dossier.adjudication?.status === "DECIDED"
+        ? "PROVISIONAL"
+        : null;
 
   const statusMap: Record<string, CaseRecord["status"]> = {
     OPEN: "OPEN",
@@ -632,5 +800,6 @@ export function presentCase(dossier: DomainDossier): CaseRecord | null {
     openedAt: dossier.dispute.openedAt,
     amount: dossier.order.amount,
     provenance: originProvenance(dossier.order),
+    judgmentStage: stage,
   };
 }
