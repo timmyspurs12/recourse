@@ -6,11 +6,15 @@
 #   1. deploy contract v2 to Studio Next (skipped when v2 is already recorded)
 #   2. smoke test, all-or-nothing, with a prompt-injection attempt
 #   3. smoke test, graduated remedy
-#   4. one real appeal, provisional → final (retried if the finality window closes first)
+#   4. one real appeal, provisional → final, in graduated mode; retried when no
+#      appeal could be filed (validators undecided, or the window closed first)
 #   5. npm run test:live
 #   6. save: evidence/run-N.md (values + full logs), MILESTONE.md, DEPLOY.md,
 #      genlayer.deployment.json
 #   7. check which contract the live site reports
+#
+# Against a contract an earlier run recorded, checks already filled in MILESTONE.md
+# are not repeated unless "recheck" is ticked.
 #
 # Nothing it saves is typed by hand: every value comes from this run's output, and a
 # check that did not pass is recorded as not passed.
@@ -22,6 +26,10 @@ on:
     inputs:
       redeploy:
         description: Deploy a new contract even if v2 is already recorded
+        type: boolean
+        default: false
+      recheck:
+        description: Repeat checks that an earlier run already recorded
         type: boolean
         default: false
 
@@ -82,36 +90,68 @@ jobs:
             echo "$fence"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Plan which checks to run
+        id: plan
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          DEPLOY_SKIPPED: ${{ steps.deploy.outputs.skipped }}
+          RECHECK: ${{ inputs.recheck }}
+        run: |
+          # A new contract gets every check. Against the recorded one, a check
+          # already filled in MILESTONE.md by an earlier run is not repeated.
+          recorded() {
+            awk -v cell="| $1 |" 'index($0, cell) == 1 && index($0, "[run #") { found = 1 } END { exit !found }' MILESTONE.md
+          }
+          plan() {
+            if [[ "$DEPLOY_SKIPPED" == "true" && "$RECHECK" != "true" ]] && recorded "$1"; then
+              echo "$2=false" >> "$GITHUB_OUTPUT"
+              echo "$2: already recorded in MILESTONE.md, not repeated"
+            else
+              echo "$2=true" >> "$GITHUB_OUTPUT"
+              echo "$2: runs"
+            fi
+          }
+          plan 'Smoke: all-or-nothing ruling + prompt-injection refused' smoke
+          plan 'Smoke: graduated ruling' graduated
+          plan 'Live appeal' appeal
+          plan '`npm run test:live`' live
+
       - name: 2 · Smoke test (all-or-nothing)
         id: smoke
-        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.plan.outputs.smoke == 'true' }}
         run: npm run --silent genlayer:smoke 2>&1 | tee evidence-logs/2-smoke.log
 
       - name: 3 · Smoke test (graduated)
         id: graduated
-        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.plan.outputs.graduated == 'true' }}
         run: npm run --silent genlayer:smoke -- --graduated 2>&1 | tee evidence-logs/3-smoke-graduated.log
 
       - name: 4 · Appeal (provisional → final)
         id: appeal
-        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.plan.outputs.appeal == 'true' }}
         run: |
-          # Exit code 2 means Studio's finality window closed before the appeal
-          # could be filed. That is timing, not a fault, so try again.
-          for attempt in 1 2 3; do
+          # Graduated mode: on a borderline case, all-or-nothing validators can
+          # split between the two answers and leave the first ruling UNDETERMINED,
+          # with nothing to appeal; a partial refund gives them common ground.
+          # An attempt is repeated only when no appeal could be filed: validators
+          # undecided, the finality window closed first (exit code 2), or the
+          # network refused the appeal because the window had just closed.
+          for attempt in 1 2 3 4; do
             echo "── attempt $attempt ──" | tee -a evidence-logs/4-appeal.log
             set +e
-            npm run --silent genlayer:appeal 2>&1 | tee -a evidence-logs/4-appeal.log
+            npm run --silent genlayer:appeal -- --graduated 2>&1 | tee evidence-logs/appeal-attempt.log
             code=${PIPESTATUS[0]}
             set -e
-            if [[ $code -ne 2 ]]; then exit "$code"; fi
-            echo "The finality window closed before the appeal was filed; trying again." | tee -a evidence-logs/4-appeal.log
+            cat evidence-logs/appeal-attempt.log >> evidence-logs/4-appeal.log
+            if [[ $code -eq 0 ]]; then exit 0; fi
+            if [[ $code -ne 2 ]] && ! grep -qE "UNDETERMINED|^appeal: +REFUSED" evidence-logs/appeal-attempt.log; then exit "$code"; fi
+            echo "No appeal could be filed on this attempt; trying again." | tee -a evidence-logs/4-appeal.log
           done
-          exit 2
+          exit 1
 
       - name: 5 · Live tests (npm run test:live)
         id: live
-        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && steps.plan.outputs.live == 'true' }}
         run: npm run --silent test:live 2>&1 | tee evidence-logs/5-live.log
 
       - name: 6 · Save the results in the repository
@@ -123,6 +163,10 @@ jobs:
           OUTCOME_GRADUATED: ${{ steps.graduated.outcome }}
           OUTCOME_APPEAL: ${{ steps.appeal.outcome }}
           OUTCOME_LIVE: ${{ steps.live.outcome }}
+          PLAN_SMOKE: ${{ steps.plan.outputs.smoke }}
+          PLAN_GRADUATED: ${{ steps.plan.outputs.graduated }}
+          PLAN_APPEAL: ${{ steps.plan.outputs.appeal }}
+          PLAN_LIVE: ${{ steps.plan.outputs.live }}
         run: |
           cat > "$RUNNER_TEMP/record.mjs" <<'JS'
           // Writes evidence/run-N.md from this run's logs, fills the matching rows in
@@ -173,6 +217,26 @@ jobs:
           const policy = pick(logs.deploy, /^policy:\s+(RecourseAdjudicator .+)$/m);
           const deposit = pick(logs.deploy, /^\s+deposit:\s+(.+)$/m);
 
+          /* Checks the plan skipped because an earlier run recorded them in MILESTONE.md. */
+          let milestone = read("MILESTONE.md");
+          const planned = (key) => env["PLAN_" + key] !== "false";
+          const EARLIER = "↺ recorded by an earlier run";
+          const earlierEvidence = (firstCell) => {
+            const line = milestone.split("\n").find((l) => l.startsWith("| " + firstCell + " |"));
+            const cell = line ? line.slice(("| " + firstCell + " | ").length).replace(/\s*\|\s*$/, "") : "see MILESTONE.md";
+            return cell.replace(/\]\(evidence\//g, "](");
+          };
+          if (!deployedNow && !["SMOKE", "GRADUATED", "APPEAL", "LIVE"].some(planned)) {
+            // Nothing new to prove: say so, and leave the repository as it is.
+            fs.appendFileSync(
+              env.GITHUB_STEP_SUMMARY,
+              "## GenLayer evidence · run #" + runNumber + "\n\nEvery check is already recorded in MILESTONE.md for contract " +
+                code(address || "?") + ", so nothing was repeated. Tick **Repeat checks that an earlier run already recorded** to run them again.\n",
+            );
+            fs.appendFileSync(env.GITHUB_OUTPUT, "address=" + (address && isV2 ? address : "") + "\nproblems=\n");
+            process.exit(0);
+          }
+
           /* Smoke runs: the transaction, and the ruling read back from finalized state. */
           function smoke(text) {
             const raw = pick(text, /^RULING:\s+(.+)$/m);
@@ -216,10 +280,23 @@ jobs:
           };
           const decisionOf = (s) => (s || "?").split(" — ")[0];
           const appealOk = Boolean(env.OUTCOME_APPEAL === "success" && appeal.tx && appeal.outcome && finalized(appeal.status));
+          const lastAttempt = logs.appeal.slice(Math.max(0, logs.appeal.lastIndexOf("── attempt")));
+          const appealRemedy = pick(lastAttempt, /^remedy:\s+(\S+)/m);
           const appealText = () =>
-            "adjudicate tx " + txLink(appeal.tx) + " · charge " + code(appeal.charge || "not reported") +
+            "adjudicate tx " + txLink(appeal.tx) + (appealRemedy ? " · remedy " + code(appealRemedy) : "") +
+            " · charge " + code(appeal.charge || "not reported") +
             " · provisional " + code(decisionOf(appeal.provisional)) + " → final " + code(decisionOf(appeal.final)) +
             " · " + code(appeal.outcome || "?");
+          const count = (re) => (logs.appeal.match(re) || []).length;
+          const attempts = count(/^── attempt \d+ ──$/gm);
+          const whyNoAppeal = [
+            [count(/did not reach a ruling/g), "the validators could not agree on a first ruling (UNDETERMINED), so there was nothing to appeal"],
+            [count(/finality window closed before a provisional ruling/g), "the finality window closed before the appeal could be filed"],
+            [count(/^appeal:\s+REFUSED/gm), "the network refused the appeal because the window had just closed"],
+          ]
+            .filter(([n]) => n > 0)
+            .map(([n, why]) => (attempts > 1 ? n + "× " : "") + why)
+            .join("; ");
 
           /* Live tests: one line per adjudication, then the runner's totals. */
           const liveRuns = [...logs.live.matchAll(new RegExp("(dsp_live_\\S+): (\\w+) · tx (" + HASH + ")", "g"))].map(
@@ -231,7 +308,8 @@ jobs:
 
           /* The results table. */
           const PASS = "✅ passed";
-          const result = (outcome, ok) => (ok ? PASS : !outcome || outcome === "skipped" ? "— not run" : "❌ did not pass");
+          const result = (key, outcome, ok) =>
+            ok ? PASS : !planned(key) ? EARLIER : !outcome || outcome === "skipped" ? "— not run" : "❌ did not pass";
           const rows = [
             [
               deployedNow ? "Contract v2 deployed (" + code("npm run genlayer:deploy") + ")" : "Contract v2 (deployed by an earlier run)",
@@ -243,8 +321,10 @@ jobs:
             ],
             [
               "Smoke: all-or-nothing, with a prompt-injection attempt (" + code("npm run genlayer:smoke") + ")",
-              result(env.OUTCOME_SMOKE, smokeOk),
-              s1.tx
+              result("SMOKE", env.OUTCOME_SMOKE, smokeOk),
+              !planned("SMOKE")
+                ? earlierEvidence("Smoke: all-or-nothing ruling + prompt-injection refused")
+                : s1.tx
                 ? "tx " + txLink(s1.tx) + " · " + (s1.status || "status not printed") + " · ruling " +
                   (!s1.ruling
                     ? "not read back"
@@ -255,32 +335,42 @@ jobs:
             ],
             [
               "Smoke: graduated remedy (" + code("npm run genlayer:smoke -- --graduated") + ")",
-              result(env.OUTCOME_GRADUATED, graduatedOk),
-              s2.tx ? "tx " + txLink(s2.tx) + " · " + (s2.status || "status not printed") + " · ruling " + (s2.ruling ? award(s2.ruling) : "not read back") : "no transaction",
+              result("GRADUATED", env.OUTCOME_GRADUATED, graduatedOk),
+              !planned("GRADUATED")
+                ? earlierEvidence("Smoke: graduated ruling")
+                : s2.tx
+                ? "tx " + txLink(s2.tx) + " · " + (s2.status || "status not printed") + " · ruling " + (s2.ruling ? award(s2.ruling) : "not read back")
+                : "no transaction",
             ],
             [
               "Appeal through GenLayer, provisional → final (" + code("npm run genlayer:appeal") + ")",
-              result(env.OUTCOME_APPEAL, appealOk),
-              appeal.tx
+              result("APPEAL", env.OUTCOME_APPEAL, appealOk),
+              !planned("APPEAL")
+                ? earlierEvidence("Live appeal")
+                : appeal.tx
                 ? appealText() + " · " + (appeal.status || "status not printed")
-                : /finality window closed/.test(logs.appeal)
-                  ? "Studio's finality window closed before an appeal could be filed, on every attempt"
-                  : "no summary printed",
+                : whyNoAppeal
+                ? "no appeal filed in " + attempts + " attempt" + (attempts === 1 ? "" : "s") + ": " + whyNoAppeal
+                : logs.appeal.trim()
+                ? "no summary printed"
+                : "did not run",
             ],
             [
               "Live tests (" + code("npm run test:live") + ")",
-              result(env.OUTCOME_LIVE, liveOk),
-              (Number.isNaN(passed) ? "no test totals printed" : passed + " passed, " + (Number.isNaN(failed) ? "?" : failed) + " failed") +
-                (liveRuns.length ? " · " + liveRuns.map((r) => txLink(r.tx) + " " + r.status).join(" · ") : ""),
+              result("LIVE", env.OUTCOME_LIVE, liveOk),
+              !planned("LIVE")
+                ? earlierEvidence("`npm run test:live`")
+                : (Number.isNaN(passed) ? "no test totals printed" : passed + " passed, " + (Number.isNaN(failed) ? "?" : failed) + " failed") +
+                  (liveRuns.length ? " · " + liveRuns.map((r) => txLink(r.tx) + " " + r.status).join(" · ") : ""),
             ],
           ];
           const table = ["| Check | Result | Evidence |", "| --- | --- | --- |", ...rows.map((r) => "| " + r.join(" | ") + " |")].join("\n");
           const problems = [];
           if (!(address && isV2)) problems.push("deploy");
-          if (!smokeOk) problems.push("smoke test");
-          if (!graduatedOk) problems.push("graduated smoke test");
-          if (!appealOk) problems.push("appeal");
-          if (!liveOk) problems.push("live tests");
+          if (planned("SMOKE") && !smokeOk) problems.push("smoke test");
+          if (planned("GRADUATED") && !graduatedOk) problems.push("graduated smoke test");
+          if (planned("APPEAL") && !appealOk) problems.push("appeal");
+          if (planned("LIVE") && !liveOk) problems.push("live tests");
 
           /* evidence/run-N.md: the table plus every log, unedited. */
           const fenced = (name, text) => {
@@ -329,7 +419,6 @@ jobs:
             return lines.join("\n");
           };
           const done = "**Done** · " + proof;
-          let milestone = read("MILESTONE.md");
           if (milestone && address && isV2) {
             if (deployedNow) {
               milestone = setRow(milestone, "v2 contract deployed on Studio Next", [done, addressLink(address) + " · deploy tx " + txLink(dep.deployTx)]);
@@ -396,13 +485,14 @@ jobs:
           }
 
           /* The run page: the same table, plus a plain-text copy for the chat. */
+          const earlier = "recorded by an earlier run";
           const plain = [
             "GenLayer evidence run #" + runNumber + " · " + runUrl,
             "contract:   " + (address || "none") + " · v" + (dep.contractVersion || "?") + " · deploy tx " + (dep.deployTx || "?") + (deployedNow ? "" : " (earlier run)"),
-            "smoke:      " + (smokeOk ? "PASS" : "NOT PASSED") + " · tx " + (s1.tx || "-") + " · " + (s1.ruling ? s1.ruling.decision : "no ruling"),
-            "graduated:  " + (graduatedOk ? "PASS" : "NOT PASSED") + " · tx " + (s2.tx || "-") + " · " + (s2.ruling ? s2.ruling.decision + " " + s2.ruling.refund_bps + " bps" : "no ruling"),
-            "appeal:     " + (appealOk ? "PASS" : "NOT PASSED") + " · tx " + (appeal.tx || "-") + " · " + decisionOf(appeal.provisional) + " → " + decisionOf(appeal.final) + " · " + (appeal.outcome || "-") + " · charge " + (appeal.charge || "-"),
-            "live tests: " + (liveOk ? "PASS" : "NOT PASSED") + " · " + (Number.isNaN(passed) ? "?" : passed) + " passed, " + (Number.isNaN(failed) ? "?" : failed) + " failed",
+            "smoke:      " + (!planned("SMOKE") ? earlier : (smokeOk ? "PASS" : "NOT PASSED") + " · tx " + (s1.tx || "-") + " · " + (s1.ruling ? s1.ruling.decision : "no ruling")),
+            "graduated:  " + (!planned("GRADUATED") ? earlier : (graduatedOk ? "PASS" : "NOT PASSED") + " · tx " + (s2.tx || "-") + " · " + (s2.ruling ? s2.ruling.decision + " " + s2.ruling.refund_bps + " bps" : "no ruling")),
+            "appeal:     " + (!planned("APPEAL") ? earlier : (appealOk ? "PASS" : "NOT PASSED") + " · tx " + (appeal.tx || "-") + " · " + decisionOf(appeal.provisional) + " → " + decisionOf(appeal.final) + " · " + (appeal.outcome || "-") + " · charge " + (appeal.charge || "-") + (appealOk ? "" : " · " + (whyNoAppeal || "no summary"))),
+            "live tests: " + (!planned("LIVE") ? earlier : (liveOk ? "PASS" : "NOT PASSED") + " · " + (Number.isNaN(passed) ? "?" : passed) + " passed, " + (Number.isNaN(failed) ? "?" : failed) + " failed"),
             "saved:      " + evidenceFile,
           ];
           fs.appendFileSync(
@@ -452,21 +542,33 @@ jobs:
         env:
           ADDRESS: ${{ steps.record.outputs.address }}
         run: |
-          # Railway redeploys after the save above; give it up to eight minutes.
+          # Railway redeploys after the save above: while the site answers with an
+          # older contract, keep asking for up to eight minutes. A site that does
+          # not answer with the app at all is reported after two minutes.
           live=""
+          answered=""
           for i in $(seq 1 24); do
-            live=$(curl -fsS --max-time 20 "$SITE_URL/api/network" |
+            live=$(curl -sS --max-time 20 "$SITE_URL/api/network" 2>/dev/null |
               node -e 'let s="";process.stdin.on("data",(d)=>(s+=d)).on("end",()=>{try{process.stdout.write(JSON.parse(s).adjudication.contractAddress||"")}catch{}})' || true)
+            if [[ -n "$live" ]]; then answered=yes; fi
             if [[ -n "$live" && "${live,,}" == "${ADDRESS,,}" ]]; then
               echo "### ✅ The live site ($SITE_URL) uses the new contract" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+            if [[ -z "$answered" && $i -ge 6 ]]; then break; fi
             sleep 20
           done
-          {
-            echo "### ⚠️ The live site still reports contract \`${live:-unknown}\`, not \`$ADDRESS\`"
-            echo "In Railway, open the service → **Variables**: delete \`GENLAYER_CONTRACT_ADDRESS\` (or set it to \`$ADDRESS\`), then redeploy."
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z "$answered" ]]; then
+            {
+              echo "### ⚠️ The live site ($SITE_URL) is not answering with the app"
+              echo "Open Railway and check the service: it may be stopped, out of credit, or without its domain."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### ⚠️ The live site still reports contract \`$live\`, not \`$ADDRESS\`"
+              echo "In Railway, open the service → **Variables**: delete \`GENLAYER_CONTRACT_ADDRESS\` (or set it to \`$ADDRESS\`), then redeploy."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Keep the raw logs
         if: ${{ !cancelled() }}
