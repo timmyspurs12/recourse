@@ -41,7 +41,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SITE_URL: https://recourse-production-bf02.up.railway.app
+  SITE_URL: https://recourse-7m5o.onrender.com
   NO_COLOR: "1"
 
 defaults:
@@ -542,9 +542,10 @@ jobs:
         env:
           ADDRESS: ${{ steps.record.outputs.address }}
         run: |
-          # Railway redeploys after the save above: while the site answers with an
+          # Render redeploys after the save above: while the site answers with an
           # older contract, keep asking for up to eight minutes. A site that does
-          # not answer with the app at all is reported after two minutes.
+          # not answer with the app at all (a free server can take a minute to
+          # wake) is reported after two minutes.
           live=""
           answered=""
           for i in $(seq 1 24); do
@@ -561,12 +562,12 @@ jobs:
           if [[ -z "$answered" ]]; then
             {
               echo "### ⚠️ The live site ($SITE_URL) is not answering with the app"
-              echo "Open Railway and check the service: it may be stopped, out of credit, or without its domain."
+              echo "Open Render and check the service: it may be suspended, still building, or failing to start."
             } >> "$GITHUB_STEP_SUMMARY"
           else
             {
               echo "### ⚠️ The live site still reports contract \`$live\`, not \`$ADDRESS\`"
-              echo "In Railway, open the service → **Variables**: delete \`GENLAYER_CONTRACT_ADDRESS\` (or set it to \`$ADDRESS\`), then redeploy."
+              echo "In Render, open the service → **Environment**: delete \`GENLAYER_CONTRACT_ADDRESS\` (or set it to \`$ADDRESS\`), then redeploy."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 

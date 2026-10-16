@@ -75,11 +75,12 @@ Builds on the accepted Agent Tank version ([0.1.0], `main` @ `220155a`). Summary
   `get_policy()`, `get_ruling_count()`. **Breaking for direct callers** of the v1 one-argument
   views; the protocol detects the contract generation (`get_policy`, with a positive v1 probe) and
   reads both.
-- Runner pin moved to `py-genlayer:babwp9t3…` (GenVM v0.6.0-rc9; Studio moved on 2026-10-14).
-  `npm run genlayer:deploy` now negotiates: it probes the contract's own pin and falls back to
-  other known runners only when the network reports the runner missing; `--pin` forces one. It
-  reads `get_policy` back after deploying, and records the runner, the contract version, and the
-  previous deployment under `history`.
+- Runner pin moved to `py-genlayer:babwp9t3…` (GenVM v0.6.0-rc9; Studio's source moved on
+  2026-10-14). `npm run genlayer:deploy` now negotiates: it probes the contract's own pin and falls
+  back to other known runners only when the network reports the runner missing; `--pin` forces
+  one. It reads `get_policy` back after deploying, and records the runner, the contract version,
+  and the previous deployment under `history`. On 2026-10-15 hosted Studio Next did not carry
+  rc9's runner yet, so v2 was deployed under the rc3–rc7 runner `5jycge4q…` by this negotiation.
 - `npm run genlayer:smoke` reads v2 rulings by signer from finalized state; `--graduated` asks
   for a proportional remedy.
 - On Studio, the submitting key is topped up through the sandbox even when it is a per-submission
@@ -97,6 +98,26 @@ Builds on the accepted Agent Tank version ([0.1.0], `main` @ `220155a`). Summary
 - `test:live` gains a graduated case and passes the submitter and inputs hash the v2 contract needs.
 - `.github/workflows/ci.yml` runs lint, types, `npm test` and the contract tests (Python 3.12,
   `GENVM_VERSION=v0.6.0-rc9`).
+- `.github/workflows/genlayer-evidence.yml`, started by hand from the Actions tab and needing no
+  key, runs the on-network checks on Studio Next: deploy v2, both smoke tests, one appeal and
+  `test:live`. It saves what the network printed to `evidence/run-N.md`, fills the matching rows of
+  `MILESTONE.md` and `DEPLOY.md`, and records a check that did not pass as not passed.
+
+### Verified on Studio Next (chain 61997)
+
+Recorded by the evidence workflow, with full logs, in [`evidence/run-1.md`](evidence/run-1.md) and
+[`evidence/run-2.md`](evidence/run-2.md):
+
+- v2 deployed at `0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581`; `get_policy` answers
+  `RecourseAdjudicator 2.0.0`.
+- Smoke tests: all-or-nothing `BUYER_WINS` despite an injected instruction to rule for the
+  merchant, and graduated `SPLIT` with `refund_bps 4000`.
+- `npm run test:live`: 3 passed.
+- One real appeal, graduated: provisional `SPLIT 40%`, appealed by the merchant, final `SPLIT 40%`,
+  `UPHELD`. An all-or-nothing attempt in run #1 ended `UNDETERMINED` (the validators split on the
+  borderline case, so there was nothing to appeal); the appeal step now uses graduated mode.
+- The live app moved from Railway, whose free allowance ran out, to Render's free plan:
+  https://recourse-7m5o.onrender.com.
 
 ## [0.1.0] — 2026-09-17 · Agent Tank submission (accepted)
 
