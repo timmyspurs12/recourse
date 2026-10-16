@@ -3,9 +3,13 @@
 The submission form requires a **live website URL**. This is the shortest path to one.
 
 > **Upgrading an existing deployment to v0.2?** Follow [`RUNBOOK.md`](RUNBOOK.md): it redeploys the
-> v2 contract (with runner negotiation), points Railway at it, and captures the transactions the
-> milestone notes cite. Studio moved to GenVM v0.6.0-rc9 on 2026-10-14, which changes the python
-> runner hash — the section on the runner pin below explains why that matters.
+> v2 contract (with runner negotiation), points the live app at it, and captures the transactions
+> the milestone notes cite. Studio's source moved to GenVM v0.6.0-rc9 on 2026-10-14, which changes
+> the python runner hash; on 2026-10-15 the hosted network had not followed yet. The section on the
+> runner pin below explains why that matters and what the deploy did.
+>
+> **The live app** runs on Render's free plan at https://recourse-7m5o.onrender.com (Option B).
+> Railway, the original host, stopped when this project's free allowance ran out.
 
 ---
 
@@ -19,11 +23,14 @@ every invocation may land on a different instance, so protected transactions wou
 mid-demo. Use a container host with a volume — or implement the Postgres adapter
 (`infra/store/schema.sql` is already written to match the entities exactly).
 
-**Recommended: Railway.** Free tier, Docker support, one-click volume, ~5 minutes.
+**Railway** is the smoothest fit: Docker support, a one-click volume, about 5 minutes. Its free
+allowance is small, though (a one-time trial credit, then a small monthly allowance), and a server
+running all day outgrows it. **Render's free plan** costs nothing but has no disk, so the ledger
+restarts from the seed records whenever the server restarts (Option B). The live app uses Render.
 
 ---
 
-## Option A — Railway (recommended)
+## Option A — Railway
 
 1. Push the repo to GitHub (see below).
 2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo** → pick it.
@@ -54,8 +61,24 @@ adjudicated flagship (RC-000042) already on record.
 
 ## Option B — Render
 
-`render.yaml` is committed with the disk already declared.
+**Paid plan, with a disk:** `render.yaml` is committed with the disk already declared.
 [render.com](https://render.com) → **New** → **Blueprint** → point at the repo → Apply.
+
+**Free plan (how the live app runs):** disks are a paid feature, so create the service by hand
+instead of from the Blueprint.
+
+1. [render.com](https://render.com) → **New** → **Web Service** → connect the GitHub repo.
+2. Language **Docker** (the `Dockerfile` is detected), branch `main`, instance type **Free**.
+3. **Environment variables:** `GENLAYER_NETWORK=studio-next` and `RECOURSE_REQUIRE_AUTH=1`. No
+   contract address is needed (the app reads `genlayer.deployment.json`) and, on Studio Next, no
+   private key: the app signs with a throwaway account that Studio funds, and `/api/network`
+   says so in its warnings.
+4. **Deploy.** The first build takes several minutes. Then open `/api/network` on the new URL and
+   check `adjudication.contractAddress`.
+
+The free plan has two costs. The server sleeps after 15 minutes without visitors, so the next
+visit waits about a minute while it wakes. And with no disk, the ledger restarts from
+`data/seed-ledger.json` every time the server restarts, so demo orders do not survive one.
 
 ## Option C — Fly.io
 
@@ -164,11 +187,11 @@ stored nothing at all. Two consequences follow, and the repo is built around bot
    cannot load. Skip it with `RECOURSE_SKIP_SCHEMA_PROBE=1`.
 
 It happened again in October 2026. GenVM v0.6.0-rc9 (released 2026-10-08)
-repackaged the runner as `babwp9t3…`, and Studio moved from rc7 to rc9 on
-2026-10-14 (`genlayer-studio` commit `c54dd453`). The v1 contract — deployed
-with `5jycge4q…` — may therefore stop executing on a network that no longer
-carries its runner, and a fresh deploy of the old file would fail the same way.
-This cannot be checked from outside the network, so v0.2 stops guessing:
+repackaged the runner as `babwp9t3…`, and Studio's source moved from rc7 to rc9
+on 2026-10-14 (`genlayer-studio` commit `c54dd453`). On a network that drops the
+old runner, the v1 contract — deployed with `5jycge4q…` — would stop executing,
+and a fresh deploy of the old file would fail the same way. Which runners a
+network carries cannot be checked from outside it, so v0.2 stops guessing:
 
 - The contract now pins `babwp9t3…` (rc9), the newest runner this repository
   knows; `KNOWN_PY_GENLAYER_RUNNERS` in `integrations/genlayer/runner-pin.ts`
@@ -179,6 +202,13 @@ This cannot be checked from outside the network, so v0.2 stops guessing:
   that deployment only. An inconclusive probe keeps the declared pin. The pin
   actually used is printed and recorded in `genlayer.deployment.json`.
 - `--pin py-genlayer:<hash>` forces a runner this repository does not know yet.
+
+**What happened on 2026-10-15** ([run #1](evidence/run-1.md)): hosted Studio Next
+had not moved yet. The probe of `babwp9t3…` failed with `runner malformed`
+(reported as `runner-missing`), `5jycge4q…` probed ok, and the script deployed v2
+under it, rewriting the header for that deployment only. The live v2 contract
+therefore shares v1's rc3–rc7 runner. When Studio does switch, a redeploy picks
+rc9's runner the same way, and is the fix if the deployed contract stops loading.
 
 `tests/genlayer.test.ts` asserts the contract pins the newest known runner, and
 `tests/v02.test.ts` covers the negotiation.
@@ -248,7 +278,8 @@ submission form.
 
 ### Then point the live app at it
 
-In Railway → Variables:
+In the host's settings (Railway → **Variables**, Render → **Environment**). On Studio Next the key
+is optional, and the address only overrides `genlayer.deployment.json`:
 
 ```
 GENLAYER_NETWORK=studio-next
@@ -295,7 +326,7 @@ the panel reviews it directly.
 ```bash
 npm install
 npm run seed        # ~40s, includes one live adjudication (network + fee deposit)
-npm test            # 58 passing
+npm test            # 96 passing
 npm run build       # clean
 ```
 

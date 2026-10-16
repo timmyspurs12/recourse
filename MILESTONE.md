@@ -4,7 +4,7 @@
 | --- | --- |
 | Project | **Recourse** — the programmable chargeback layer for autonomous commerce (GenLayer Agent Tank, accepted) |
 | Accepted baseline | `main` @ [`220155a`](https://github.com/timmyspurs12/recourse/tree/220155aa0ca70f3472eb2e1ac955eacf05bb5659) (2026-09-17) · v1 contract `0x17DA09A8d79d5ef709655f71a5e6AC4c3885CD56` on Studio Next (chain 61997) |
-| This milestone | v0.2.0 · branch `arena/5d3d9dea-recourse` · 2026-10-15 · full diff: [`CHANGELOG.md`](CHANGELOG.md) |
+| This milestone | v0.2.0 · merged into `main` in [PR #3](https://github.com/timmyspurs12/recourse/pull/3) · 2026-10-15 · full diff: [`CHANGELOG.md`](CHANGELOG.md) |
 | Type | New contract functionality · security/architecture improvement · new deployment (v2 contract) |
 | Traction | None claimed. Recourse has no external users yet. |
 
@@ -111,12 +111,17 @@ recycled. Every ruling is now bound to the request that asked for it.
 
 ### 5. Keeping up with the network
 
-Studio moved from GenVM v0.6.0-rc7 to rc9 on 2026-10-14, which changes the python runner hash. The
-v1 contract pins the rc3–rc7 runner (`5jycge4q…`).
+Studio's source moved from GenVM v0.6.0-rc7 to rc9 on 2026-10-14 (`genlayer-studio` commit
+`c54dd453`), which changes the python runner hash. The v1 contract pins the rc3–rc7 runner
+(`5jycge4q…`).
 
 - v2 pins rc9's runner (`babwp9t3…`).
 - `npm run genlayer:deploy` **negotiates**: it probes the contract's own pin, falls back to the other
   known runners only when the network reports the runner missing, and records the pin it used.
+  - **What happened on the real deployment** ([run #1](evidence/run-1.md)): on 2026-10-15 hosted
+    Studio Next did not carry rc9's runner yet. The probe of `babwp9t3…` failed with
+    `runner malformed`, `5jycge4q…` probed ok, and v2 was deployed under it with no manual step.
+    When Studio switches, a redeploy picks rc9's runner the same way.
 - After deploying, it reads `get_policy` back to confirm the contract answers.
 - Off Studio, the forum submits finalization itself once the window has elapsed.
 
@@ -139,9 +144,9 @@ v1 contract pins the rc3–rc7 runner (`5jycge4q…`).
 | v2 contract deployed on Studio Next | **Done** · [run #1](evidence/run-1.md) | [`0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581`](https://explorer-studio-dev.genlayer.com/address/0x5e8C7F778a052BB6Ad42F0ab4F91c3B25dCFf581) · deploy tx [`0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3`](https://explorer-studio-dev.genlayer.com/tx/0x4f4850855461e37a759457961574d914cdfd7bf5a88ab82882fd7a30743434b3) |
 | Live adjudication on v2 (all-or-nothing + graduated) | **Done** · [run #1](evidence/run-1.md) | all-or-nothing [`0x576aa265cce7321944cee3ef2515707c8428e7ab93f7186efdc6661695e1844c`](https://explorer-studio-dev.genlayer.com/tx/0x576aa265cce7321944cee3ef2515707c8428e7ab93f7186efdc6661695e1844c) · graduated [`0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85`](https://explorer-studio-dev.genlayer.com/tx/0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85) |
 | Live appeal on v2 | **Done** · [run #2](evidence/run-2.md) | adjudicate tx [`0x85fb85c988345a8f374309f91e4eb0f14d8ad6ab020d5533579698a96c07a22c`](https://explorer-studio-dev.genlayer.com/tx/0x85fb85c988345a8f374309f91e4eb0f14d8ad6ab020d5533579698a96c07a22c) · `UPHELD` |
-| Live app (Railway) on v2 | **Pending.** RUNBOOK §7 | https://recourse-production-bf02.up.railway.app |
+| Live app on v2 (Render, free plan) | **Done** · `/api/network` reports the v2 contract (checked 2026-10-15) | https://recourse-7m5o.onrender.com · the free server sleeps after 15 idle minutes, so the first visit can take about a minute |
 | CI on GitHub | **Green**: lint, types, 96 app tests, 28 contract tests on genlayer-test 0.30.0rc2 + GenVM v0.6.0-rc9 | [run 38734558429](https://github.com/timmyspurs12/recourse/actions/runs/38734558429) |
-| The v1 contract still executing on Studio after the rc9 move | **Unknown.** Could not be checked from the build environment; the redeploy above supersedes it | — |
+| The v1 contract still executing on Studio | **Not re-tested.** On 2026-10-15 Studio still ran the rc3–rc7 runner that v1 pins (v2 was deployed and ran under it, [run #1](evidence/run-1.md)), so v1 should still load; v2 supersedes it either way | — |
 
 **How the offline parts were verified.**
 
@@ -176,7 +181,7 @@ v1 contract pins the rc3–rc7 runner (`5jycge4q…`).
 | Smoke: graduated ruling | tx [`0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85`](https://explorer-studio-dev.genlayer.com/tx/0x4b5e3ae37255bea81a5361a3b0921a370fae380abb5e937770c4804d6702da85) · ruling `SPLIT`, `refund_bps 4000` (40% back to the buyer) · [run #1](evidence/run-1.md) |
 | Live appeal | adjudicate tx [`0x85fb85c988345a8f374309f91e4eb0f14d8ad6ab020d5533579698a96c07a22c`](https://explorer-studio-dev.genlayer.com/tx/0x85fb85c988345a8f374309f91e4eb0f14d8ad6ab020d5533579698a96c07a22c) · remedy `GRADUATED` · charge `<0.000001 GEN` · provisional `SPLIT 40%` → final `SPLIT 40%` · `UPHELD` · [run #2](evidence/run-2.md) |
 | `npm run test:live` | 3 passed, 0 failed · [`0x735dfab4a2a1eeee505b14800fed0a0ff281db1f318f877c9ab8aafc27aa9a32`](https://explorer-studio-dev.genlayer.com/tx/0x735dfab4a2a1eeee505b14800fed0a0ff281db1f318f877c9ab8aafc27aa9a32) · [`0x1ce1bebe276b257ac22f02097c5301fe3c96a019f9b769389b19a1af9c333521`](https://explorer-studio-dev.genlayer.com/tx/0x1ce1bebe276b257ac22f02097c5301fe3c96a019f9b769389b19a1af9c333521) · [`0x599b03500d420af39edaf874eda637251ee2fcdcdbf57041e64288f6115a2d6c`](https://explorer-studio-dev.genlayer.com/tx/0x599b03500d420af39edaf874eda637251ee2fcdcdbf57041e64288f6115a2d6c) · [run #1](evidence/run-1.md) |
-| Live demo on Railway | order `RC-…` (dispute path, provisional → final → refund), order `RC-…` (partial path → split) |
+| Live demo | https://recourse-7m5o.onrender.com/demo — **Promise breached** (provisional → final → refund) and **Partial delivery** (graduated → split). No order ids are cited: the free server has no disk, so its ledger restarts from the seed records whenever the server restarts |
 
 ## Submission text (copy-paste)
 
@@ -189,7 +194,8 @@ appeal mechanism. The protocol pays the network-quoted bond and follows the same
 refunds, validators agree on materiality exactly and on the amount within one 10-point step, and
 escrow settles in two exact legs. v2 also fixes a v1 hole where a ruling could be pre-empted or
 recycled through predictable dispute ids: rulings are now bound to their submitter and inputs hash.
-The deploy script negotiates the GenVM runner pin (Studio moved to rc9 on 2026-10-14).
+The deploy script negotiates the GenVM runner pin: hosted Studio Next did not carry rc9's runner on
+2026-10-15, and v2 deployed under the rc3–rc7 runner automatically.
 
 **Why it matters:** A chargeback layer must not pay out before the verdict is final, a model's
 judgment must be contestable, and partial delivery should get a partial remedy.
@@ -204,5 +210,5 @@ npm ci && npm test                                   # 96 tests, no network
 python3 -m pip install -r tests/contracts/requirements.txt
 GENVM_VERSION=v0.6.0-rc9 python3 -m pytest tests/contracts -q   # 28 contract tests
 npm run genlayer:smoke -- --graduated                # one real graduated ruling (Studio Next)
-npm run genlayer:appeal                              # one real appeal, provisional → final
+npm run genlayer:appeal -- --graduated               # one real appeal, provisional → final
 ```

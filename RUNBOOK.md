@@ -8,38 +8,64 @@ Total time: about 45 minutes, most of it waiting for validators.
 
 ---
 
+## The short way: let GitHub run it (nothing to install)
+
+Steps 3–6 and 8 can run on GitHub's own machines, which cost nothing for a public repository:
+
+1. Open the **Actions** tab, then **GenLayer evidence**, then **Run workflow**, then the green
+   **Run workflow** button.
+2. Wait 20–40 minutes, most of it validators deliberating.
+3. Open the run. Its summary page shows a table of results and a box to copy.
+
+The workflow, [`.github/workflows/genlayer-evidence.yml`](.github/workflows/genlayer-evidence.yml),
+works through these stages:
+
+- It deploys v2, unless v2 is already recorded.
+- It runs both smoke tests, the appeal and `npm run test:live`.
+- It saves the results back to `main`:
+  - `evidence/run-N.md`: every value, with the complete logs;
+  - the matching rows in `MILESTONE.md`, and the "Current deployment" table in `DEPLOY.md`;
+  - `genlayer.deployment.json`, with v1 kept under `history`.
+- It reports which contract the live site is using. If that is still v1, do step 7.
+
+It needs no key or secret: each step uses a throwaway account that Studio funds itself. A check
+that does not pass is recorded as not passed, and its `MILESTONE.md` row stays **Pending**.
+
+To finish what is missing, run it again with both boxes unticked. It reuses the recorded
+contract, skips checks already recorded in `MILESTONE.md`, and runs the rest. Tick **Repeat
+checks…** to run everything again, or **Deploy a new contract…** to start over on a fresh one.
+
+---
+
 ## 0. What you need
 
 - **Node.js 20** and npm. Check with `node -v` (it should print `v20…`).
 - **Git**, with this repository cloned.
-- **A GenLayer private key** for signing: 64 hex characters, written with a `0x` prefix. The one
-  that deployed v1 (`0x6441F8…`) is fine.
-  - On Studio Next the sandbox tops up a low balance automatically.
-  - If you do not have one: `npm run wallet` prints a new key once. Save it somewhere safe.
+- **A GenLayer private key: optional on Studio Next.** Without one, every command below uses a
+  throwaway account that the Studio sandbox funds itself (`sim_fundAccount`). A key matters only
+  if you want rulings signed by a fixed address, or for a public testnet.
+  - A key is 64 hex characters, written with a `0x` prefix. On Studio Next a low balance is topped
+    up automatically.
+  - `npm run wallet` prints a new key once. Save it somewhere safe.
 - **Optional, for the contract tests:** Python **3.12 or newer** (`python3 --version`).
-- **Railway access** to the existing project.
+- **Access to the host** that runs the live app. It is on Render's free plan now (step 7).
 
-Throughout, replace `0xYOUR_KEY` with your key. Never paste it into chat, a commit or a screenshot.
+If you use a key, replace `0xYOUR_KEY` with it wherever it appears below; without one, leave out
+`--key 0xYOUR_KEY` and skip setting `GENLAYER_PRIVATE_KEY`. Never paste a key into chat, a commit
+or a screenshot.
 
 ---
 
 ## 1. Get the v0.2 code
 
-The work is on branch `arena/5d3d9dea-recourse`, opened as a pull request against `main`.
-Reviewers and Railway both look at `main`, so merge it first.
+The v0.2 work is merged into `main` (pull request #3, 2026-10-15). Reviewers and the live app
+both use `main`.
 
-1. On GitHub, open the pull request, review it, and click **Merge pull request**.
-   - Or use the CLI: `gh pr merge <number> --merge`.
-2. Update your local copy:
-
-   ```bash
-   git checkout main
-   git pull
-   npm ci
-   ```
-
-> Want to test before merging? Run `git fetch && git checkout arena/5d3d9dea-recourse`, then
-> `npm ci`, and do steps 2–6 on the branch. Merge before step 7.
+```bash
+git checkout main
+git pull
+npm ci
+```
 
 ---
 
@@ -84,7 +110,8 @@ $env:GENVM_VERSION="v0.6.0-rc9"; python -m pytest tests/contracts -q
 ## 3. Deploy the v2 contract to Studio Next
 
 ```bash
-npm run genlayer:deploy -- --key 0xYOUR_KEY
+npm run genlayer:deploy                       # no key: a throwaway account Studio funds
+npm run genlayer:deploy -- --key 0xYOUR_KEY   # or sign with your own key
 ```
 
 ### What you should see
@@ -129,7 +156,8 @@ git push
 
 ## 4. Smoke test the deployed contract (2 runs, a few minutes each)
 
-From here on the scripts read the key from an environment variable. Set it once per terminal.
+If you use a key, the scripts read it from an environment variable from here on; set it once per
+terminal. Without a key, skip this and run the commands as they are.
 
 bash:
 
@@ -176,8 +204,14 @@ npm run genlayer:smoke -- --graduated
 ## 5. One real appeal (5–10 minutes)
 
 ```bash
-npm run genlayer:appeal
+npm run genlayer:appeal -- --graduated
 ```
+
+The appeal case is borderline on purpose: three of five required sources, and a merchant who argues
+that is immaterial. In **graduated** mode validators can settle on a partial refund. Without
+`--graduated` (all-or-nothing) they have to pick one side outright, and on this case they can split
+and leave the first ruling `UNDETERMINED`, with nothing to appeal. That is what happened on
+2026-10-15 ([run #1](evidence/run-1.md)). The evidence workflow therefore appeals in graduated mode.
 
 ### What it does
 
@@ -198,8 +232,12 @@ npm run genlayer:appeal
 
 ### If it exits with "The finality window closed before a provisional ruling was observed"
 
-Studio's window is short. Simply run it again. You can add `-- --graduated` to appeal a split
-ruling instead.
+Studio's window is short. Simply run it again.
+
+### If it exits with "The adjudication did not reach a ruling … (UNDETERMINED)"
+
+The validators could not agree on a first ruling, so there was nothing to appeal. Run it again,
+in graduated mode if you were not already using it. This is a result of the network, not an error.
 
 ---
 
@@ -230,19 +268,22 @@ finality.
 
 ---
 
-## 7. Point the live app (Railway) at v2
+## 7. Point the live app at v2
 
-1. Make sure step 1's merge, and step 3's commit of `genlayer.deployment.json`, are on `main`.
-   Railway deploys `main`.
-2. Railway → your service → **Variables**:
-   - **`GENLAYER_CONTRACT_ADDRESS`** → set to the **new v2 address** from step 3.
-   - **`GENLAYER_PRIVATE_KEY`** → keep it set. It pays fee deposits and, in v0.2, appeal bonds.
-   - Leave `GENLAYER_NETWORK=studio-next`, `RECOURSE_REQUIRE_AUTH=1` and
-     `RECOURSE_STORE_FILE=/app/.recourse/ledger.json` as they are.
-3. **Deployments** → redeploy, or wait for the automatic deploy from the push.
+The live app runs on Render's free plan at https://recourse-7m5o.onrender.com, deployed from
+`main`. Railway hosted it until this project's free allowance ran out; [`DEPLOY.md`](DEPLOY.md),
+Option B, explains the Render setup.
+
+1. Make sure step 3's `genlayer.deployment.json` is on `main` (the evidence workflow commits it
+   for you). With no `GENLAYER_CONTRACT_ADDRESS` set, the app uses the address in that file.
+2. Render → your service → **Environment**: `GENLAYER_NETWORK=studio-next` and
+   `RECOURSE_REQUIRE_AUTH=1`. A `GENLAYER_PRIVATE_KEY` is optional on Studio Next; without one the
+   app signs with a throwaway account that Studio funds.
+3. Render redeploys by itself after each push to `main`; or use **Manual Deploy**.
 4. Check the deployment answers with the new contract. Open
-   `https://recourse-production-bf02.up.railway.app/api/network` and confirm
-   `adjudication.contractAddress` is the v2 address.
+   `https://recourse-7m5o.onrender.com/api/network` and confirm
+   `adjudication.contractAddress` is the v2 address. After a quiet spell the first request takes
+   about a minute while the free server wakes up.
 5. Run the live demo at `/demo`.
    - **Promise breached.** The order moves through **PROVISIONAL RULING**. While provisional you can
      press **Appeal as the merchant** (optional). It reaches a final ruling, then the refund. The
@@ -252,18 +293,19 @@ finality.
      total.
 6. Open each finished order's dossier, using the "Open the full dossier" link.
 
-**Copy into the evidence table:**
+Nothing from this step goes into the evidence table: the free plan has no disk, so orders last
+only until the server next restarts. The on-network transactions from steps 3–6 are the evidence.
 
-- Both order ids (`RC-…`).
-- The adjudication transaction shown on each dispute page.
-
-> Records already in the Railway ledger from v0.1 stay as they are. The dispute page labels them
-> *Recorded on acceptance (v0.1)*. Any v0.1 dispute still in flight is polled at the contract it
+> After a restart the ledger holds only the seed records, including the v0.1 flagship `RC-000042`,
+> which the dispute page labels *Recorded on acceptance (v0.1)*. On a host with a disk, records
+> from v0.1 stay as they are, and any v0.1 dispute still in flight is polled at the contract it
 > was sent to.
 
 ---
 
 ## 8. Record the evidence and publish
+
+If you used the evidence workflow ("The short way"), it has already done 1–3: go to 4.
 
 1. Fill in the **Evidence to cite** table in `MILESTONE.md`, and the `0x…` placeholders in its
    **Submission text**.
@@ -306,6 +348,7 @@ Remember: one milestone can await review at a time, and the weekly slot resets M
 | `APPEAL_WINDOW_CLOSED` | The network no longer accepts an appeal for that decision | Nothing to do; the ruling stands |
 | `APPEAL_UNAVAILABLE` … insufficient funds | The signing key cannot pay the bond | On Studio it is topped up automatically; elsewhere fund `GENLAYER_PRIVATE_KEY` |
 | `Refusing to act on this ruling: …made against inputs…` | The contract holds a ruling for that id made against other inputs (a reused id on the v1 contract) | Expected protection. Use the v2 contract; the dispute can be resubmitted |
-| Adjudications fail on the **old** v1 contract | Studio's rc9 move can stop the rc7 runner from loading | Redeploy v2 (step 3) and repoint Railway (step 7) |
+| Adjudications fail with a runner error on a deployed contract | Studio dropped the runner it was deployed with. v1 and the current v2 deployment both use the rc3–rc7 runner, which hosted Studio still ran on 2026-10-15 | Redeploy (step 3, or the workflow with **Deploy a new contract…** ticked). The script picks a runner the network carries, and the app follows `genlayer.deployment.json` |
+| The live site takes about a minute to open, or shows only the seed records | Render's free plan sleeps after 15 idle minutes and has no disk | Expected on the free plan. A paid plan with the disk from `render.yaml` keeps orders |
 | `npm run test:live` fails in PowerShell | The npm script uses bash syntax | Use the PowerShell command in step 6 |
 | Contract tests cannot find the runner | `GENVM_VERSION` does not match the contract's pin | Set `GENVM_VERSION=v0.6.0-rc9` (or the release matching line 2) |
